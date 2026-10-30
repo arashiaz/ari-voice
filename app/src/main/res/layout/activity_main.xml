@@ -14,6 +14,9 @@
             <TextView android:id="@+id/engineStatus" android:layout_width="match_parent"
                 android:layout_height="wrap_content" android:textColor="#3756B8"
                 android:textStyle="bold" android:textSize="14sp" />
+            <Button android:id="@+id/downloadVoice" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:layout_marginTop="10dp"
+                android:text="دریافت مدل گفتار زبان انتخابی (یک‌بار)" android:textAllCaps="false" />
             <TextView android:id="@+id/status" android:layout_width="match_parent"
                 android:layout_height="wrap_content" android:layout_marginTop="12dp"
                 android:text="آماده‌ام. یک فرمان بگویید یا بنویسید."
@@ -45,9 +48,6 @@
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="8dp" android:text="اگر تشخیص گفتار آفلاین گوشی موجود نباشد، فایل ZIP مدل Vosk زبان انتخابی را یک‌بار وارد کنید. مدل فقط در حافظهٔ همین برنامه نگه داشته می‌شود."
             android:textColor="#56617B" android:textSize="14sp" />
-        <Button android:id="@+id/downloadVoice" android:layout_width="match_parent"
-            android:layout_height="wrap_content" android:layout_marginTop="8dp"
-            android:text="دریافت مدل گفتار زبان انتخابی (یک‌بار)" android:textAllCaps="false" />
         <Button android:id="@+id/importModel" android:layout_width="match_parent"
             android:layout_height="wrap_content" android:layout_marginTop="8dp"
             android:text="واردکردن مدل آفلاین (ZIP)" android:textAllCaps="false" />

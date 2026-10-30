@@ -143,6 +143,14 @@ class MainActivity : Activity() {
             if (result == TextToSpeech.SUCCESS) handler.post { if (!isDestroyed) updateTtsVoice() }
         }
         updateEngine()
+        if (savedInstanceState == null && !ModelImporter.isInstalled(this, selectedLanguage) &&
+            !getPreferences(MODE_PRIVATE).getBoolean("setup-offered", false)) {
+            getPreferences(MODE_PRIVATE).edit().putBoolean("setup-offered", true).apply()
+            AlertDialog.Builder(this).setTitle("راه‌اندازی فرمان صوتی آفلاین")
+                .setMessage("بستهٔ زبان گوشی شما ممکن است نصب نباشد. مدل گفتار زبان انتخابی حدود ${if (selectedLanguage == SpeechLanguage.PERSIAN) "۵۳" else "۴۰"} مگابایت است. فقط برای دانلود اولیه اینترنت لازم است. اکنون دریافت شود؟")
+                .setPositiveButton("دریافت مدل گفتار") { _, _ -> downloadModel(false, selectedLanguage) }
+                .setNegativeButton("بعداً", null).show()
+        }
         autoListen = intent.getBooleanExtra(EXTRA_AUTO_LISTEN, false)
         if (autoListen && savedInstanceState == null) handler.post { requestMicrophoneAndListen() }
     }
@@ -220,6 +228,14 @@ class MainActivity : Activity() {
                     updateEngine()
                     setStatus(if (failure == null) "مدل گفتار آماده است؛ اکنون دکمهٔ شنیدن را بزنید."
                               else "دریافت مدل ناموفق بود: $failure")
+                    if (failure == null && !ChatModel.installed(this) &&
+                        !getPreferences(MODE_PRIVATE).getBoolean("ai-offered", false)) {
+                        getPreferences(MODE_PRIVATE).edit().putBoolean("ai-offered", true).apply()
+                        AlertDialog.Builder(this).setTitle("گفت‌وگوی هوش مصنوعی آفلاین")
+                            .setMessage("مدل سبک Qwen حدود ۴۹۱ مگابایت است. آیا آن را هم اکنون برای پاسخ‌های گفت‌وگویی روی گوشی دریافت کنیم؟")
+                            .setPositiveButton("دریافت") { _, _ -> downloadModel(true, language) }
+                            .setNegativeButton("بعداً", null).show()
+                    }
                 }
             }
         }.start()
