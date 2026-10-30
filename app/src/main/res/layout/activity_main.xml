@@ -1,0 +1,53 @@
+<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent" android:layout_height="match_parent"
+    android:fillViewport="true" android:layoutDirection="rtl">
+    <LinearLayout android:orientation="vertical" android:padding="22dp"
+        android:layout_width="match_parent" android:layout_height="wrap_content">
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:text="آری‌ویس" android:textSize="32sp" android:textStyle="bold" android:textColor="#18264C" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="4dp" android:text="دستیار فرمان‌های صوتی، روی گوشی شما"
+            android:textSize="15sp" android:textColor="#56617B" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="24dp" android:padding="20dp" android:orientation="vertical"
+            android:background="@drawable/card">
+            <TextView android:id="@+id/engineStatus" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:textColor="#3756B8"
+                android:textStyle="bold" android:textSize="14sp" />
+            <TextView android:id="@+id/status" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:layout_marginTop="12dp"
+                android:text="آماده‌ام. یک فرمان بگویید یا بنویسید."
+                android:textColor="#18264C" android:textSize="17sp" />
+            <EditText android:id="@+id/command" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:layout_marginTop="18dp"
+                android:hint="مثلاً: جستجو کن آب و هوا" android:inputType="text"
+                android:singleLine="true" android:textSize="16sp" />
+            <Button android:id="@+id/listen" android:layout_width="match_parent"
+                android:layout_height="52dp" android:layout_marginTop="18dp"
+                android:background="@drawable/primary_button" android:text="🎙  شروع شنیدن"
+                android:textColor="#FFFFFF" android:textSize="17sp" android:textAllCaps="false" />
+            <Button android:id="@+id/run" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:layout_marginTop="8dp"
+                android:text="اجرای فرمان نوشته‌شده" android:textAllCaps="false" />
+        </LinearLayout>
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="26dp" android:text="راه‌اندازی" android:textSize="20sp"
+            android:textStyle="bold" android:textColor="#18264C" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" android:text="اگر تشخیص گفتار آفلاین گوشی موجود نباشد، فایل ZIP مدل Vosk فارسی را یک‌بار وارد کنید. مدل فقط در حافظهٔ همین برنامه نگه داشته می‌شود."
+            android:textColor="#56617B" android:textSize="14sp" />
+        <Button android:id="@+id/importModel" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginTop="8dp"
+            android:text="واردکردن مدل آفلاین (ZIP)" android:textAllCaps="false" />
+        <Button android:id="@+id/accessibility" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginTop="4dp"
+            android:text="فعال‌کردن کنترل داخل برنامه‌ها (اختیاری)" android:textAllCaps="false" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="20dp" android:padding="18dp" android:background="@drawable/card"
+            android:text="نمونه فرمان‌ها\n\n«باز کن تلگرام»  •  «جستجو کن هوای تهران»\n«روی تنظیمات بزن»  •  «بنویس سلام»\n«اسکرول پایین»  •  «برو عقب»\n\nبرای فرمان در برنامهٔ دیگر، کاشی آری‌ویس را به تنظیمات سریع گوشی اضافه کنید. پس از شنیدن، به همان برنامه برمی‌گردیم. پیام‌ها هرگز خودکار ارسال نمی‌شوند."
+            android:textSize="14sp" android:lineSpacingExtra="5dp" android:textColor="#34405F" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="18dp" android:text="بدون حساب، تبلیغ یا سرور. جستجوی وب از مرورگر شما استفاده می‌کند و نیازمند اینترنت است."
+            android:textSize="13sp" android:textColor="#68738B" />
+    </LinearLayout>
+</ScrollView>
