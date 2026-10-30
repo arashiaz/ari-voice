@@ -2,6 +2,7 @@ package com.arashiaz.arivoice
 
 import android.Manifest
 import android.app.Activity
+import android.app.AlertDialog
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -20,6 +21,7 @@ import android.widget.Button
 import android.widget.Spinner
 import android.view.View
 import android.widget.EditText
+import java.io.File
 import android.widget.TextView
 import org.json.JSONObject
 import org.vosk.Model
@@ -32,6 +34,7 @@ class MainActivity : Activity() {
         const val EXTRA_AUTO_LISTEN = "auto_listen"
         private const val REQUEST_AUDIO = 10
         private const val REQUEST_MODEL = 11
+        private const val REQUEST_AI = 12
     }
 
     private val handler = Handler(Looper.getMainLooper())
@@ -41,6 +44,15 @@ class MainActivity : Activity() {
     private lateinit var listenButton: Button
     private lateinit var importButton: Button
     private lateinit var languageSpinner: Spinner
+    private lateinit var aiStatus: TextView
+    private lateinit var aiResponse: TextView
+    private lateinit var askButton: Button
+    private lateinit var voiceDownload: Button
+    private lateinit var aiDownload: Button
+    @Volatile private var downloadCancelled = false
+    private var downloadBusy = false
+    private var aiBusy = false
+    private var chat: OfflineChat? = null
     private var selectedLanguage = SpeechLanguage.PERSIAN
     private var loadedLanguage: SpeechLanguage? = null
     private var androidRecognizer: SpeechRecognizer? = null
@@ -62,6 +74,37 @@ class MainActivity : Activity() {
         listenButton = findViewById(R.id.listen)
         importButton = findViewById(R.id.importModel)
         languageSpinner = findViewById(R.id.language)
+        aiStatus = findViewById(R.id.aiStatus)
+        aiResponse = findViewById(R.id.aiResponse)
+        askButton = findViewById(R.id.askAi)
+        voiceDownload = findViewById(R.id.downloadVoice)
+        aiDownload = findViewById(R.id.downloadAi)
+        askButton.setOnClickListener { askAi(commandInput.text.toString()) }
+        findViewById<Button>(R.id.importAi).setOnClickListener {
+            if (aiBusy || downloadBusy) return@setOnClickListener
+            startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                addCategory(Intent.CATEGORY_OPENABLE)
+                type = "application/octet-stream"
+                putExtra(Intent.EXTRA_MIME_TYPES, arrayOf("application/octet-stream", "*/*"))
+            }, REQUEST_AI)
+        }
+        voiceDownload.setOnClickListener {
+            if (downloadBusy) { downloadCancelled = true; return@setOnClickListener }
+            val language = selectedLanguage
+            val size = if (language == SpeechLanguage.PERSIAN) "۵۳" else "۴۰"
+            AlertDialog.Builder(this).setTitle("دریافت مدل گفتار")
+                .setMessage("مدل $size مگابایتی فقط یک‌بار دانلود و روی گوشی ذخیره می‌شود. برای دانلود اولیه اینترنت لازم است؛ صدا ارسال نمی‌شود. ادامه؟")
+                .setPositiveButton("دریافت") { _, _ -> downloadModel(false, language) }
+                .setNegativeButton("انصراف", null).show()
+        }
+        aiDownload.setOnClickListener {
+            if (downloadBusy) { downloadCancelled = true; return@setOnClickListener }
+            AlertDialog.Builder(this).setTitle("دریافت هوش مصنوعی آفلاین")
+                .setMessage("مدل رسمی Qwen حدود ۴۹۱ مگابایت است. دانلود ممکن است از اینترنت همراه شما حجم مصرف کند. فقط فایل مدل دریافت می‌شود؛ سؤال‌های شما ارسال نمی‌شوند. ادامه؟")
+                .setPositiveButton("دریافت") { _, _ -> downloadModel(true, selectedLanguage) }
+                .setNegativeButton("انصراف", null).show()
+        }
+        updateAiStatus()
         selectedLanguage = SpeechLanguage.fromCode(getPreferences(MODE_PRIVATE).getString("language", "fa"))
         languageSpinner.setSelection(selectedLanguage.ordinal)
         languageSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
@@ -120,18 +163,110 @@ class MainActivity : Activity() {
         if (voice != null) offlineVoiceReady = tts?.setVoice(voice) == TextToSpeech.SUCCESS
     }
 
+    private fun updateAiStatus() {
+        aiStatus.text = if (ChatModel.installed(this))
+            "● مدل GGUF نصب است؛ گفت‌وگو پس از بارگذاری اولیه کاملاً آفلاین است."
+        else "○ مدل گفت‌وگو نصب نیست. آن را یک‌بار دریافت یا از فایل GGUF وارد کنید."
+    }
+
+    private fun downloadModel(isChat: Boolean, language: SpeechLanguage) {
+        if (downloadBusy || aiBusy || listening || loading) return
+        downloadBusy = true
+        downloadCancelled = false
+        languageSpinner.isEnabled = false
+        if (!isChat && loadedLanguage == language) {
+            model?.close()
+            model = null
+            loadedLanguage = null
+        }
+        val button = if (isChat) aiDownload else voiceDownload
+        button.text = "لغو دانلود"
+        val url = if (isChat) ModelCatalog.CHAT else if (language == SpeechLanguage.PERSIAN) ModelCatalog.PERSIAN_STT else ModelCatalog.ENGLISH_STT
+        val temp = File(cacheDir, if (isChat) "ai-download.gguf" else "speech-download.zip")
+        val context = applicationContext
+        val progress: (Int) -> Unit = { percent ->
+            handler.post { if (!isDestroyed) {
+                if (isChat) aiStatus.text = "در حال دریافت مدل هوش مصنوعی: $percent٪"
+                else setStatus("در حال دریافت مدل گفتار: $percent٪")
+            } }
+        }
+        Thread {
+            var failure: String? = null
+            try {
+                val limit = if (isChat) 800_000_000L else 200_000_000L
+                ModelDownload.download(url, temp, limit, { downloadCancelled }, progress,
+                    if (isChat) ModelCatalog.CHAT_SHA256 else null)
+                if (downloadCancelled) error("دانلود لغو شد")
+                if (isChat) {
+                    chat?.unload()
+                    ChatModel.import(context, Uri.fromFile(temp))
+                } else {
+                    ModelImporter.import(context, Uri.fromFile(temp), language)
+                }
+            } catch (e: Exception) { failure = e.message ?: "خطای نامشخص" }
+            finally { temp.delete() }
+            handler.post {
+                if (isDestroyed) return@post
+                downloadBusy = false
+                languageSpinner.isEnabled = true
+                button.text = if (isChat) "دریافت مدل هوش مصنوعی (~۴۹۱ مگابایت)"
+                    else "دریافت مدل گفتار زبان انتخابی (یک‌بار)"
+                if (isChat) {
+                    updateAiStatus()
+                    if (failure != null) aiStatus.text = "دریافت مدل ناموفق بود: $failure"
+                } else {
+                    updateEngine()
+                    setStatus(if (failure == null) "مدل گفتار آماده است؛ اکنون دکمهٔ شنیدن را بزنید."
+                              else "دریافت مدل ناموفق بود: $failure")
+                }
+            }
+        }.start()
+    }
+
+    private fun askAi(question: String) {
+        if (question.isBlank()) { aiStatus.text = "ابتدا سؤال خود را در کادر بالا بنویسید یا بگویید."; return }
+        if (!ChatModel.installed(this)) {
+            aiStatus.text = "مدل هوش مصنوعی نصب نیست. دکمهٔ دریافت یا واردکردن مدل GGUF را بزنید."
+            return
+        }
+        if (aiBusy || downloadBusy) return
+        aiBusy = true
+        askButton.isEnabled = false
+        aiStatus.text = "در حال تولید پاسخ روی گوشی… بار اول ممکن است کمی طول بکشد."
+        aiResponse.text = ""
+        val language = selectedLanguage
+        val instance = chat ?: OfflineChat(applicationContext).also { chat = it }
+        Thread {
+            val result = runCatching { instance.reply(question, language) }
+            handler.post {
+                if (isDestroyed) return@post
+                aiBusy = false
+                askButton.isEnabled = true
+                result.onSuccess { answer ->
+                    aiStatus.text = "● پاسخ آفلاین آماده است"
+                    aiResponse.text = answer
+                    if (offlineVoiceReady) tts?.speak(answer.take(500), TextToSpeech.QUEUE_FLUSH, null, "ai-response")
+                }.onFailure { error -> aiStatus.text = "پاسخ‌دادن مدل ناموفق بود: ${error.message}" }
+            }
+        }.start()
+    }
+
+    private fun systemSpeechAvailable(): Boolean =
+        Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(this) &&
+            !getPreferences(MODE_PRIVATE).getBoolean("on-device-error-${selectedLanguage.code}", false)
+
     private fun updateEngine() {
         val languageName = if (selectedLanguage == SpeechLanguage.PERSIAN) "فارسی" else "انگلیسی"
         engineStatus.text = when {
             ModelImporter.isInstalled(this, selectedLanguage) -> "● مدل Vosk $languageName نصب است • تشخیص گفتار آفلاین"
-            Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(this) ->
+            systemSpeechAvailable() ->
                 "● تشخیص گفتار آفلاین سیستم (در صورت نصب بستهٔ $languageName)"
             else -> "○ برای فرمان صوتی $languageName، مدل آفلاین Vosk را وارد کنید"
         }
     }
 
     private fun requestMicrophoneAndListen() {
-        if (loading || listening) return
+        if (loading || listening || downloadBusy || aiBusy) return
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_AUDIO)
         } else startListening()
@@ -177,11 +312,11 @@ class MainActivity : Activity() {
                     }
                 }
             }.start()
-        } else if (Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(this)) {
+        } else if (systemSpeechAvailable()) {
             startSystemRecognizer()
         } else {
             languageSpinner.isEnabled = true
-            setStatus("ابتدا ZIP مدل Vosk زبان انتخابی را وارد کنید؛ برای تشخیص گفتار از اینترنت استفاده نمی‌شود.")
+            setStatus("ابتدا دکمهٔ «دریافت مدل گفتار» را بزنید؛ فقط دانلود اولیه اینترنت لازم دارد.")
         }
     }
 
@@ -239,7 +374,12 @@ class MainActivity : Activity() {
                     override fun onError(error: Int) {
                         if (handled) return
                         stopListening()
-                        setStatus("تشخیص آفلاین گوشی در دسترس نیست یا بستهٔ زبان نصب نیست (خطا $error). مدل Vosk را وارد کنید.")
+                        if (error == 12 || error == 13) {
+                            getPreferences(MODE_PRIVATE).edit()
+                                .putBoolean("on-device-error-${selectedLanguage.code}", true).apply()
+                            updateEngine()
+                        }
+                        setStatus("بستهٔ گفتار آفلاین گوشی در دسترس نیست (خطا $error). از بخش راه‌اندازی، مدل گفتار را دریافت کنید.")
                     }
                     override fun onResults(results: Bundle?) {
                         if (handled) return
@@ -307,7 +447,11 @@ class MainActivity : Activity() {
 
     private fun runCommand(input: String) {
         val parsed = CommandParser.parse(input)
-        if (parsed == null) { setStatus("فرمان را نشناختم. یکی از نمونه‌های پایین صفحه را امتحان کنید."); return }
+        if (parsed == null) {
+            if (ChatModel.installed(this)) askAi(input)
+            else setStatus("فرمان را نشناختم. برای سؤال آزاد ابتدا مدل هوش مصنوعی را دریافت کنید.")
+            return
+        }
         when (parsed) {
             is VoiceCommand.Search -> {
                 val uri = Uri.Builder().scheme("https").authority("www.google.com")
@@ -375,9 +519,29 @@ class MainActivity : Activity() {
     @Deprecated("System document picker result")
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
         super.onActivityResult(requestCode, resultCode, data)
-        if (requestCode != REQUEST_MODEL || resultCode != RESULT_OK) return
+        if (resultCode != RESULT_OK || requestCode !in listOf(REQUEST_MODEL, REQUEST_AI)) return
         val uri = data?.data ?: return
-        if (loading || listening) return
+        if (requestCode == REQUEST_AI) {
+            if (aiBusy || downloadBusy) return
+            aiBusy = true
+            askButton.isEnabled = false
+            aiStatus.text = "در حال ذخیرهٔ مدل GGUF…"
+            Thread {
+                val result = runCatching {
+                    chat?.unload()
+                    ChatModel.import(applicationContext, uri)
+                }
+                handler.post {
+                    if (isDestroyed) return@post
+                    aiBusy = false
+                    askButton.isEnabled = true
+                    updateAiStatus()
+                    result.onFailure { aiStatus.text = "واردکردن مدل ناموفق بود: ${it.message}" }
+                }
+            }.start()
+            return
+        }
+        if (loading || listening || downloadBusy || aiBusy) return
         loading = true
         languageSpinner.isEnabled = false
         importButton.isEnabled = false
@@ -413,6 +577,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        downloadCancelled = true
         stopListening()
         // A model may still be loading on a worker; that worker closes it if this activity is destroyed.
         model?.close(); model = null

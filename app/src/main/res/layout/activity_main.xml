@@ -45,18 +45,42 @@
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="8dp" android:text="اگر تشخیص گفتار آفلاین گوشی موجود نباشد، فایل ZIP مدل Vosk زبان انتخابی را یک‌بار وارد کنید. مدل فقط در حافظهٔ همین برنامه نگه داشته می‌شود."
             android:textColor="#56617B" android:textSize="14sp" />
+        <Button android:id="@+id/downloadVoice" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:layout_marginTop="8dp"
+            android:text="دریافت مدل گفتار زبان انتخابی (یک‌بار)" android:textAllCaps="false" />
         <Button android:id="@+id/importModel" android:layout_width="match_parent"
             android:layout_height="wrap_content" android:layout_marginTop="8dp"
             android:text="واردکردن مدل آفلاین (ZIP)" android:textAllCaps="false" />
         <Button android:id="@+id/accessibility" android:layout_width="match_parent"
             android:layout_height="wrap_content" android:layout_marginTop="4dp"
             android:text="فعال‌کردن کنترل داخل برنامه‌ها (اختیاری)" android:textAllCaps="false" />
+        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="22dp" android:padding="18dp" android:orientation="vertical"
+            android:background="@drawable/card">
+            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:text="گفت‌وگوی هوش مصنوعی آفلاین" android:textSize="19sp"
+                android:textStyle="bold" android:textColor="#18264C" />
+            <TextView android:id="@+id/aiStatus" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:layout_marginTop="10dp"
+                android:text="مدل کوچک ۰٫۵ میلیاردی، فقط روی گوشی اجرا می‌شود. برای استفاده آن را یک‌بار دریافت یا وارد کنید."
+                android:textColor="#56617B" android:textSize="14sp" />
+            <Button android:id="@+id/downloadAi" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:layout_marginTop="8dp"
+                android:text="دریافت مدل هوش مصنوعی (~۴۹۱ مگابایت)" android:textAllCaps="false" />
+            <Button android:id="@+id/importAi" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:text="واردکردن مدل GGUF از فایل" android:textAllCaps="false" />
+            <Button android:id="@+id/askAi" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:text="پرسیدن از هوش مصنوعی (متن بالا)" android:textAllCaps="false" />
+            <TextView android:id="@+id/aiResponse" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:layout_marginTop="12dp"
+                android:textIsSelectable="true" android:textColor="#18264C" android:textSize="16sp" />
+        </LinearLayout>
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="20dp" android:padding="18dp" android:background="@drawable/card"
             android:text="نمونه فرمان‌ها\n\n«باز کن تلگرام»  •  «جستجو کن هوای تهران»\n«روی تنظیمات بزن»  •  «بنویس سلام»\n«اسکرول پایین»  •  «برو عقب»\n«open Telegram»  •  «search for weather»\n\nبرای فرمان در برنامهٔ دیگر، کاشی آری‌ویس را به تنظیمات سریع گوشی اضافه کنید. پس از شنیدن، به همان برنامه برمی‌گردیم. پیام‌ها هرگز خودکار ارسال نمی‌شوند."
             android:textSize="14sp" android:lineSpacingExtra="5dp" android:textColor="#34405F" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="18dp" android:text="بدون حساب، تبلیغ یا سرور. جستجوی وب از مرورگر شما استفاده می‌کند و نیازمند اینترنت است."
+            android:layout_marginTop="18dp" android:text="بدون حساب، تبلیغ یا سرور پردازش صوت. فقط دریافت اولیهٔ مدل‌ها و جستجوی وب اینترنت لازم دارند؛ گفتار و پاسخ‌ها از گوشی خارج نمی‌شوند."
             android:textSize="13sp" android:textColor="#68738B" />
     </LinearLayout>
 </ScrollView>

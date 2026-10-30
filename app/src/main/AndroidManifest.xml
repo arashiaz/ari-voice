@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
-    <!-- No INTERNET permission: the app itself cannot send audio or commands to a server. -->
+    <!-- Only for explicit downloads of static model files; inference and audio stay on-device. -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
     <queries>
         <intent>
             <action android:name="android.intent.action.MAIN" />
