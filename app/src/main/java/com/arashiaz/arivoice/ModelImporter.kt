@@ -7,13 +7,14 @@ import java.util.zip.ZipInputStream
 
 /** Imports a user-selected Vosk ZIP into private storage; never downloads anything. Call off the UI thread. */
 object ModelImporter {
-    fun installedModel(context: Context) = File(context.filesDir, "model-active")
-    fun isInstalled(context: Context) = File(installedModel(context), "am/final.mdl").isFile
+    fun installedModel(context: Context, language: SpeechLanguage) = File(context.filesDir, language.modelFolder)
+    fun isInstalled(context: Context, language: SpeechLanguage) =
+        File(installedModel(context, language), "am/final.mdl").isFile
 
-    fun import(context: Context, uri: Uri) {
-        val staging = File(context.filesDir, "model-staging")
-        val current = installedModel(context)
-        val backup = File(context.filesDir, "model-backup")
+    fun import(context: Context, uri: Uri, language: SpeechLanguage) {
+        val staging = File(context.filesDir, "model-${language.code}-staging")
+        val current = installedModel(context, language)
+        val backup = File(context.filesDir, "model-${language.code}-backup")
         staging.deleteRecursively()
         staging.mkdirs()
         try {

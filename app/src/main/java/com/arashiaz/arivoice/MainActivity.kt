@@ -15,7 +15,10 @@ import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.speech.tts.TextToSpeech
+import android.widget.AdapterView
 import android.widget.Button
+import android.widget.Spinner
+import android.view.View
 import android.widget.EditText
 import android.widget.TextView
 import org.json.JSONObject
@@ -23,7 +26,6 @@ import org.vosk.Model
 import org.vosk.Recognizer
 import org.vosk.android.RecognitionListener as VoskListener
 import org.vosk.android.SpeechService
-import java.util.Locale
 
 class MainActivity : Activity() {
     companion object {
@@ -38,6 +40,9 @@ class MainActivity : Activity() {
     private lateinit var commandInput: EditText
     private lateinit var listenButton: Button
     private lateinit var importButton: Button
+    private lateinit var languageSpinner: Spinner
+    private var selectedLanguage = SpeechLanguage.PERSIAN
+    private var loadedLanguage: SpeechLanguage? = null
     private var androidRecognizer: SpeechRecognizer? = null
     private var speechService: SpeechService? = null
     private var model: Model? = null
@@ -56,6 +61,27 @@ class MainActivity : Activity() {
         commandInput = findViewById(R.id.command)
         listenButton = findViewById(R.id.listen)
         importButton = findViewById(R.id.importModel)
+        languageSpinner = findViewById(R.id.language)
+        selectedLanguage = SpeechLanguage.fromCode(getPreferences(MODE_PRIVATE).getString("language", "fa"))
+        languageSpinner.setSelection(selectedLanguage.ordinal)
+        languageSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
+            override fun onNothingSelected(parent: AdapterView<*>?) = Unit
+            override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
+                val language = SpeechLanguage.entries[position]
+                if (language == selectedLanguage) return
+                if (loading || listening) {
+                    languageSpinner.setSelection(selectedLanguage.ordinal)
+                    return
+                }
+                model?.close()
+                model = null
+                loadedLanguage = null
+                selectedLanguage = language
+                getPreferences(MODE_PRIVATE).edit().putString("language", language.code).apply()
+                updateEngine()
+                updateTtsVoice()
+            }
+        }
         listenButton.setOnClickListener { if (listening) finishListening() else requestMicrophoneAndListen() }
         findViewById<Button>(R.id.run).setOnClickListener { runCommand(commandInput.text.toString()) }
         importButton.setOnClickListener {
@@ -71,13 +97,7 @@ class MainActivity : Activity() {
             setStatus("در تنظیمات، سرویس «کنترل اختیاری برنامه‌ها با آری‌ویس» را فعال کنید.")
         }
         tts = TextToSpeech(this) { result ->
-            if (result == TextToSpeech.SUCCESS) {
-                // Never use a voice that needs a network connection.
-                val voice = tts?.voices?.firstOrNull {
-                    it.locale.language == "fa" && !it.isNetworkConnectionRequired
-                }
-                if (voice != null) offlineVoiceReady = tts?.setVoice(voice) == TextToSpeech.SUCCESS
-            }
+            if (result == TextToSpeech.SUCCESS) handler.post { if (!isDestroyed) updateTtsVoice() }
         }
         updateEngine()
         autoListen = intent.getBooleanExtra(EXTRA_AUTO_LISTEN, false)
@@ -91,12 +111,22 @@ class MainActivity : Activity() {
         if (autoListen) handler.post { requestMicrophoneAndListen() }
     }
 
+    private fun updateTtsVoice() {
+        offlineVoiceReady = false
+        // TTS is optional: only local voices for the selected language are permitted.
+        val voice = tts?.voices?.firstOrNull {
+            it.locale.language == selectedLanguage.code && !it.isNetworkConnectionRequired
+        }
+        if (voice != null) offlineVoiceReady = tts?.setVoice(voice) == TextToSpeech.SUCCESS
+    }
+
     private fun updateEngine() {
+        val languageName = if (selectedLanguage == SpeechLanguage.PERSIAN) "فارسی" else "انگلیسی"
         engineStatus.text = when {
-            ModelImporter.isInstalled(this) -> "● مدل Vosk فارسی نصب است • تشخیص گفتار آفلاین"
+            ModelImporter.isInstalled(this, selectedLanguage) -> "● مدل Vosk $languageName نصب است • تشخیص گفتار آفلاین"
             Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(this) ->
-                "● تشخیص گفتار آفلاین سیستم (در صورت نصب بستهٔ فارسی)"
-            else -> "○ برای فرمان صوتی، مدل آفلاین Vosk را وارد کنید"
+                "● تشخیص گفتار آفلاین سیستم (در صورت نصب بستهٔ $languageName)"
+            else -> "○ برای فرمان صوتی $languageName، مدل آفلاین Vosk را وارد کنید"
         }
     }
 
@@ -117,16 +147,23 @@ class MainActivity : Activity() {
 
     private fun startListening() {
         handled = false
-        if (ModelImporter.isInstalled(this)) {
+        languageSpinner.isEnabled = false
+        if (ModelImporter.isInstalled(this, selectedLanguage)) {
             loading = true
             setStatus("در حال بارگذاری مدل آفلاین…")
             listenButton.isEnabled = false
+            val language = selectedLanguage
+            val cached = model?.takeIf { loadedLanguage == language }
             Thread {
                 try {
-                    val loaded = model ?: Model(ModelImporter.installedModel(this).absolutePath)
+                    val loaded = cached ?: Model(ModelImporter.installedModel(this, language).absolutePath)
                     handler.post {
-                        if (isFinishing || isDestroyed) { loaded.close(); return@post }
+                        if (isFinishing || isDestroyed) {
+                            if (loaded !== cached) loaded.close()
+                            return@post
+                        }
                         model = loaded
+                        loadedLanguage = language
                         loading = false
                         listenButton.isEnabled = true
                         startVosk(loaded)
@@ -135,6 +172,7 @@ class MainActivity : Activity() {
                     handler.post {
                         loading = false
                         listenButton.isEnabled = true
+                        languageSpinner.isEnabled = true
                         setStatus("مدل بارگذاری نشد: ${e.message}")
                     }
                 }
@@ -142,7 +180,8 @@ class MainActivity : Activity() {
         } else if (Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(this)) {
             startSystemRecognizer()
         } else {
-            setStatus("ابتدا ZIP مدل Vosk فارسی را وارد کنید؛ برای تشخیص گفتار از اینترنت استفاده نمی‌شود.")
+            languageSpinner.isEnabled = true
+            setStatus("ابتدا ZIP مدل Vosk زبان انتخابی را وارد کنید؛ برای تشخیص گفتار از اینترنت استفاده نمی‌شود.")
         }
     }
 
@@ -200,7 +239,7 @@ class MainActivity : Activity() {
                     override fun onError(error: Int) {
                         if (handled) return
                         stopListening()
-                        setStatus("تشخیص آفلاین گوشی در دسترس نیست یا بستهٔ فارسی نصب نیست (خطا $error). مدل Vosk را وارد کنید.")
+                        setStatus("تشخیص آفلاین گوشی در دسترس نیست یا بستهٔ زبان نصب نیست (خطا $error). مدل Vosk را وارد کنید.")
                     }
                     override fun onResults(results: Bundle?) {
                         if (handled) return
@@ -216,7 +255,7 @@ class MainActivity : Activity() {
                 })
                 recognizer.startListening(Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                     putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, "fa-IR")
+                    putExtra(RecognizerIntent.EXTRA_LANGUAGE, selectedLanguage.recognitionTag)
                     putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 })
             }
@@ -256,6 +295,7 @@ class MainActivity : Activity() {
         handled = true
         listening = false
         listenButton.isEnabled = true
+        languageSpinner.isEnabled = !loading
         listenButton.text = "🎙  شروع شنیدن"
         speechService?.cancel()
         speechService?.shutdown()
@@ -274,7 +314,7 @@ class MainActivity : Activity() {
                     .appendPath("search").appendQueryParameter("q", parsed.query).build()
                 try {
                     startActivity(Intent(Intent.ACTION_VIEW, uri))
-                    feedback("جستجو در مرورگر باز شد")
+                    feedback("جستجو در مرورگر باز شد", "Search opened in browser")
                 } catch (_: Exception) { setStatus("مرورگری برای جستجو پیدا نشد.") }
             }
             is VoiceCommand.OpenApp -> openApp(parsed.name)
@@ -303,10 +343,10 @@ class MainActivity : Activity() {
 
     private fun openApp(name: String) {
         if (name in listOf("تنظیمات", "settings")) {
-            startActivity(Intent(Settings.ACTION_SETTINGS)); feedback("تنظیمات باز شد"); return
+            startActivity(Intent(Settings.ACTION_SETTINGS)); feedback("تنظیمات باز شد", "Settings opened"); return
         }
         if (name in listOf("مرورگر", "browser")) {
-            try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com"))); feedback("مرورگر باز شد") }
+            try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com"))); feedback("مرورگر باز شد", "Browser opened") }
             catch (_: Exception) { setStatus("مرورگری پیدا نشد.") }
             return
         }
@@ -321,13 +361,14 @@ class MainActivity : Activity() {
                 component = ComponentName(match.activityInfo.packageName, match.activityInfo.name)
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             })
-            feedback("${match.loadLabel(packageManager)} باز شد")
+            feedback("${match.loadLabel(packageManager)} باز شد", "${match.loadLabel(packageManager)} opened")
         } catch (_: Exception) { setStatus("باز کردن این برنامه امکان‌پذیر نیست.") }
     }
 
-    private fun feedback(message: String) {
+    private fun feedback(message: String, englishMessage: String = "Done") {
         setStatus(message)
-        if (offlineVoiceReady) tts?.speak(message, TextToSpeech.QUEUE_FLUSH, null, "response")
+        val spoken = if (selectedLanguage == SpeechLanguage.ENGLISH) englishMessage else message
+        if (offlineVoiceReady) tts?.speak(spoken, TextToSpeech.QUEUE_FLUSH, null, "response")
     }
     private fun setStatus(message: String) { status.text = message }
 
@@ -338,18 +379,23 @@ class MainActivity : Activity() {
         val uri = data?.data ?: return
         if (loading || listening) return
         loading = true
+        languageSpinner.isEnabled = false
         importButton.isEnabled = false
         listenButton.isEnabled = false
         setStatus("در حال استخراج مدل در حافظهٔ گوشی…")
+        // No recognizer is running while importing; release the cached model before replacing its files.
+        model?.close()
+        model = null
+        loadedLanguage = null
+        val language = selectedLanguage
         Thread {
             try {
-                // Release native model before replacing its files.
-                model?.close(); model = null
-                ModelImporter.import(applicationContext, uri)
+                ModelImporter.import(applicationContext, uri, language)
                 handler.post {
                     loading = false
                     importButton.isEnabled = true
                     listenButton.isEnabled = true
+                    languageSpinner.isEnabled = true
                     updateEngine()
                     setStatus("مدل آفلاین آماده است. حالا دکمهٔ شنیدن را بزنید.")
                 }
@@ -358,6 +404,7 @@ class MainActivity : Activity() {
                     loading = false
                     importButton.isEnabled = true
                     listenButton.isEnabled = true
+                    languageSpinner.isEnabled = true
                     updateEngine()
                     setStatus("واردکردن مدل ناموفق بود: ${e.message}")
                 }

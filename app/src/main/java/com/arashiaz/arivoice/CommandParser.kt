@@ -21,33 +21,37 @@ object CommandParser {
     fun parse(input: String): VoiceCommand? {
         val s = normalize(input).trimEnd('؟', '?', '.', '،')
         if (s.isBlank()) return null
-        if (s in listOf("برو عقب", "برگرد", "عقب", "back")) return VoiceCommand.Back
-        if (s in listOf("برو خانه", "صفحه اصلی", "خانه", "home")) return VoiceCommand.Home
-        if (s in listOf("اعلان ها", "اعلان ها را باز کن", "نوتیفیکیشن ها")) return VoiceCommand.Notifications
-        if (s in listOf("اسکرول پایین", "برو پایین", "پایین برو", "scroll down")) return VoiceCommand.Scroll(true)
-        if (s in listOf("اسکرول بالا", "برو بالا", "بالا برو", "scroll up")) return VoiceCommand.Scroll(false)
+        if (s in listOf("برو عقب", "برگرد", "برگشت", "عقب", "back", "go back")) return VoiceCommand.Back
+        if (s in listOf("برو خانه", "صفحه اصلی", "خانه", "home", "go home")) return VoiceCommand.Home
+        if (s in listOf("اعلان ها", "اعلان ها را باز کن", "نوتیفیکیشن ها", "notifications", "show notifications")) return VoiceCommand.Notifications
+        if (s in listOf("اسکرول پایین", "برو پایین", "پایین برو", "صفحه را پایین ببر", "scroll down")) return VoiceCommand.Scroll(true)
+        if (s in listOf("اسکرول بالا", "برو بالا", "بالا برو", "صفحه را بالا ببر", "scroll up")) return VoiceCommand.Scroll(false)
 
-        for (prefix in listOf("جستجو کن ", "جستجوی ", "جستجو برای ", "سرچ کن ", "سرچ ", "گوگل کن ", "search ")) {
+        for (prefix in listOf("جستجو کن ", "جستجوی ", "جستجو برای ", "سرچ کن ", "سرچ ", "گوگل کن ", "تو گوگل ", "در گوگل ", "search for ", "search ", "google ")) {
             if (s.startsWith(prefix)) return value(s.removePrefix(prefix)) { VoiceCommand.Search(it) }
         }
         Regex("^(.+?) (?:را|رو) جستجو کن$").matchEntire(s)?.let {
             return value(it.groupValues[1]) { query -> VoiceCommand.Search(query) }
         }
-        for (prefix in listOf("باز کن ", "برنامه ", "اپلیکیشن ", "اجرای ", "open ")) {
-            if (s.startsWith(prefix)) return value(s.removePrefix(prefix)) { VoiceCommand.OpenApp(it) }
+        for (prefix in listOf("باز کن ", "برنامه ", "اپلیکیشن ", "اجرای ", "اجرا کن ", "open the ", "launch ", "open ")) {
+            if (s.startsWith(prefix)) {
+                val name = s.removePrefix(prefix).removeSuffix(" app").removeSuffix(" application")
+                return value(name) { VoiceCommand.OpenApp(it) }
+            }
         }
         Regex("^(.+?) (?:را|رو) باز کن$").matchEntire(s)?.let {
             return value(it.groupValues[1]) { name -> VoiceCommand.OpenApp(name) }
         }
-        for (prefix in listOf("روی ", "کلیک روی ", "tap ")) {
+        for (prefix in listOf("روی ", "کلیک روی ", "گزینه ", "tap on ", "click on ", "tap ", "click ", "press ")) {
             if (s.startsWith(prefix)) {
-                val label = s.removePrefix(prefix).removeSuffix(" بزن").removeSuffix(" کلیک کن")
+                val label = s.removePrefix(prefix).removeSuffix(" را بزن").removeSuffix(" رو بزن")
+                    .removeSuffix(" بزن").removeSuffix(" کلیک کن")
                 return value(label) { VoiceCommand.Tap(it) }
             }
         }
         // Keep the user's original casing and punctuation in dictated text.
         val original = input.trim().replace('\u200c', ' ').replace('ي', 'ی').replace('ك', 'ک')
-        val typed = Regex("^(?:بنویس|تایپ کن|متن|type)\\s+(.+)$", RegexOption.IGNORE_CASE)
+        val typed = Regex("^(?:بنویس|تایپ کن|متن|type|write|enter)\\s+(.+)$", RegexOption.IGNORE_CASE)
             .matchEntire(original)?.groupValues?.get(1)
         if (typed != null) {
             val text = typed.replace(Regex("\\s+(?:را|رو) بنویس$"), "")

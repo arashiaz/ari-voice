@@ -31,10 +31,19 @@
                 android:text="اجرای فرمان نوشته‌شده" android:textAllCaps="false" />
         </LinearLayout>
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="26dp" android:text="زبان فرمان صوتی" android:textSize="20sp"
+            android:textStyle="bold" android:textColor="#18264C" />
+        <Spinner android:id="@+id/language" android:layout_width="match_parent"
+            android:layout_height="52dp" android:entries="@array/voice_languages"
+            android:contentDescription="زبان تشخیص گفتار" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="8dp" android:text="برای هر زبان مدل آفلاین جداگانه وارد کنید؛ زبان انتخابی روی تشخیص گفتار و پاسخ صوتی اثر دارد."
+            android:textColor="#56617B" android:textSize="14sp" />
+        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="26dp" android:text="راه‌اندازی" android:textSize="20sp"
             android:textStyle="bold" android:textColor="#18264C" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="8dp" android:text="اگر تشخیص گفتار آفلاین گوشی موجود نباشد، فایل ZIP مدل Vosk فارسی را یک‌بار وارد کنید. مدل فقط در حافظهٔ همین برنامه نگه داشته می‌شود."
+            android:layout_marginTop="8dp" android:text="اگر تشخیص گفتار آفلاین گوشی موجود نباشد، فایل ZIP مدل Vosk زبان انتخابی را یک‌بار وارد کنید. مدل فقط در حافظهٔ همین برنامه نگه داشته می‌شود."
             android:textColor="#56617B" android:textSize="14sp" />
         <Button android:id="@+id/importModel" android:layout_width="match_parent"
             android:layout_height="wrap_content" android:layout_marginTop="8dp"
@@ -44,7 +53,7 @@
             android:text="فعال‌کردن کنترل داخل برنامه‌ها (اختیاری)" android:textAllCaps="false" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="20dp" android:padding="18dp" android:background="@drawable/card"
-            android:text="نمونه فرمان‌ها\n\n«باز کن تلگرام»  •  «جستجو کن هوای تهران»\n«روی تنظیمات بزن»  •  «بنویس سلام»\n«اسکرول پایین»  •  «برو عقب»\n\nبرای فرمان در برنامهٔ دیگر، کاشی آری‌ویس را به تنظیمات سریع گوشی اضافه کنید. پس از شنیدن، به همان برنامه برمی‌گردیم. پیام‌ها هرگز خودکار ارسال نمی‌شوند."
+            android:text="نمونه فرمان‌ها\n\n«باز کن تلگرام»  •  «جستجو کن هوای تهران»\n«روی تنظیمات بزن»  •  «بنویس سلام»\n«اسکرول پایین»  •  «برو عقب»\n«open Telegram»  •  «search for weather»\n\nبرای فرمان در برنامهٔ دیگر، کاشی آری‌ویس را به تنظیمات سریع گوشی اضافه کنید. پس از شنیدن، به همان برنامه برمی‌گردیم. پیام‌ها هرگز خودکار ارسال نمی‌شوند."
             android:textSize="14sp" android:lineSpacingExtra="5dp" android:textColor="#34405F" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="18dp" android:text="بدون حساب، تبلیغ یا سرور. جستجوی وب از مرورگر شما استفاده می‌کند و نیازمند اینترنت است."
