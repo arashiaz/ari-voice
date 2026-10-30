@@ -181,6 +181,8 @@ class MainActivity : Activity() {
         }
         val button = if (isChat) aiDownload else voiceDownload
         button.text = "لغو دانلود"
+        if (isChat) aiStatus.text = "در حال دریافت مدل… صفحه را باز نگه دارید."
+        else setStatus("در حال دریافت مدل گفتار… صفحه را باز نگه دارید.")
         val url = if (isChat) ModelCatalog.CHAT else if (language == SpeechLanguage.PERSIAN) ModelCatalog.PERSIAN_STT else ModelCatalog.ENGLISH_STT
         val temp = File(cacheDir, if (isChat) "ai-download.gguf" else "speech-download.zip")
         val context = applicationContext
