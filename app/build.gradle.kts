@@ -14,6 +14,14 @@ android {
         versionCode = 1
         versionName = "0.1.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        ndk { abiFilters += listOf("arm64-v8a") }
+        externalNativeBuild {
+            cmake { arguments += listOf("-DCMAKE_BUILD_TYPE=Release") }
+        }
+    }
+    ndkVersion = "27.2.12479018"
+    externalNativeBuild {
+        cmake { path = file("src/main/cpp/CMakeLists.txt"); version = "3.22.1" }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
@@ -25,5 +33,6 @@ android {
 dependencies {
     implementation("com.alphacephei:vosk-android:0.3.47@aar")
     implementation("net.java.dev.jna:jna:5.13.0@aar")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
     testImplementation("junit:junit:4.13.2")
 }

@@ -6,3 +6,5 @@ local.properties
 *.apk
 *.aab
 captures/
+vendor/llama.cpp/
+.cxx/
