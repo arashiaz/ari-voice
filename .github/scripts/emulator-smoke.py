@@ -89,6 +89,10 @@ def type_command(value):
     adb("shell", "input", "text", value.replace(" ", "%s"))
     adb("shell", "input", "keyevent", "KEYCODE_BACK")  # close keyboard
     root = wait_for(lambda ui: node_by_id(ui, "run") is not None, "run command button")
+    received = node_by_id(root, "command")
+    actual = received.get("text", "") if received is not None else "<not visible>"
+    if actual != value:
+        raise AssertionError(f"Typed input mismatch: wanted {value!r}, UI shows {actual!r}")
     click(root, "run")
 
 
@@ -98,12 +102,19 @@ print(adb("install", "-r", "app/build/outputs/apk/debug/app-debug.apk").stdout)
 
 # This is a real Android activity launch using the installed APK.
 type_command("open settings")
-focus = adb("shell", "dumpsys", "window").stdout
-active = [line.strip() for line in focus.splitlines()
-          if "mCurrentFocus" in line or "mFocusedApp" in line]
+active = []
+for _ in range(10):
+    focus = adb("shell", "dumpsys", "window").stdout
+    active = [line.strip() for line in focus.splitlines()
+              if "mCurrentFocus" in line or "mFocusedApp" in line]
+    if any("com.android.settings" in line for line in active):
+        break
+    time.sleep(2)
 print("Focused window:", active[:3])
 if not any("com.android.settings" in line for line in active):
-    raise AssertionError("Open settings command did not switch to Android Settings")
+    root = dump()
+    visible = [node.get("text", "") for node in root.iter("node") if node.get("text")]
+    raise AssertionError(f"Open settings did not switch apps. Focus: {active[:3]}; UI: {visible[:14]}")
 
 # Regression: a compound command must request accessibility rather than try to
 # launch a nonexistent app named 'instagram search ardalan'.
