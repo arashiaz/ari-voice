@@ -91,7 +91,8 @@ def type_command(value):
     root = wait_for(lambda ui: node_by_id(ui, "run") is not None, "run command button")
     received = node_by_id(root, "command")
     actual = received.get("text", "") if received is not None else "<not visible>"
-    if actual != value:
+    # Android keyboard may capitalize proper names (for example Instagram).
+    if actual.casefold() != value.casefold():
         raise AssertionError(f"Typed input mismatch: wanted {value!r}, UI shows {actual!r}")
     click(root, "run")
 
