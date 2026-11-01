@@ -7,15 +7,32 @@ This does NOT verify microphone recognition or search inside Instagram.
 
 import re
 import subprocess
+import sys
 import time
+import traceback
 import xml.etree.ElementTree as ET
 
 PACKAGE = "com.arashiaz.arivoice"
 ACTIVITY = PACKAGE + "/.MainActivity"
 
 
+def report_failure(error_type, error, tb):
+    # CI log downloads are not always reachable from the sandbox; expose the
+    # specific error in the run's annotations as well as the full step log.
+    details = str(error).replace("%", "%25").replace("\r", "%0D").replace("\n", "%0A")
+    print(f"::error title=Android emulator smoke test::{error_type.__name__}: {details}", flush=True)
+    traceback.print_exception(error_type, error, tb)
+
+
+sys.excepthook = report_failure
+
+
 def adb(*args):
-    return subprocess.run(["adb", *args], check=True, capture_output=True, text=True)
+    result = subprocess.run(["adb", *args], capture_output=True, text=True)
+    if result.returncode:
+        raise RuntimeError(f"adb {' '.join(args)} exited {result.returncode}: "
+                           f"{result.stdout[-350:]} {result.stderr[-350:]}")
+    return result
 
 
 def dump():
