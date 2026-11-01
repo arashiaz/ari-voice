@@ -6,6 +6,7 @@ import android.app.AlertDialog
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
+import android.content.pm.ResolveInfo
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
@@ -40,6 +41,7 @@ class MainActivity : Activity() {
     private val handler = Handler(Looper.getMainLooper())
     private lateinit var status: TextView
     private lateinit var engineStatus: TextView
+    private lateinit var accessibilityState: TextView
     private lateinit var commandInput: EditText
     private lateinit var listenButton: Button
     private lateinit var importButton: Button
@@ -70,6 +72,7 @@ class MainActivity : Activity() {
         setContentView(R.layout.activity_main)
         status = findViewById(R.id.status)
         engineStatus = findViewById(R.id.engineStatus)
+        accessibilityState = findViewById(R.id.accessibilityState)
         commandInput = findViewById(R.id.command)
         listenButton = findViewById(R.id.listen)
         importButton = findViewById(R.id.importModel)
@@ -143,6 +146,7 @@ class MainActivity : Activity() {
             if (result == TextToSpeech.SUCCESS) handler.post { if (!isDestroyed) updateTtsVoice() }
         }
         updateEngine()
+        updateAccessibilityStatus()
         if (savedInstanceState == null && !ModelImporter.isInstalled(this, selectedLanguage) &&
             !getPreferences(MODE_PRIVATE).getBoolean("setup-offered", false)) {
             getPreferences(MODE_PRIVATE).edit().putBoolean("setup-offered", true).apply()
@@ -160,6 +164,17 @@ class MainActivity : Activity() {
         setIntent(intent)
         autoListen = intent.getBooleanExtra(EXTRA_AUTO_LISTEN, false)
         if (autoListen) handler.post { requestMicrophoneAndListen() }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        if (::accessibilityState.isInitialized) updateAccessibilityStatus()
+    }
+
+    private fun updateAccessibilityStatus() {
+        accessibilityState.text = if (VoiceAccessibilityService.active != null)
+            "● کنترل داخل برنامه‌ها فعال است؛ از کاشی آری‌ویس در تنظیمات سریع استفاده کنید."
+        else "○ کنترل داخل برنامه‌ها خاموش است؛ بازکردن اپ و جستجو بدون آن کار می‌کنند."
     }
 
     private fun updateTtsVoice() {
@@ -482,7 +497,11 @@ class MainActivity : Activity() {
             is VoiceCommand.OpenApp -> openApp(parsed.name)
             else -> {
                 if (VoiceAccessibilityService.active == null) {
-                    setStatus("برای فرمان داخل برنامه‌ها، ابتدا سرویس دسترس‌پذیری آری‌ویس را فعال کنید.")
+                    setStatus("برای لمس/نوشتن در برنامهٔ دیگر، سرویس دسترس‌پذیری آری‌ویس باید فعال باشد.")
+                    AlertDialog.Builder(this).setTitle("کنترل برنامه‌های دیگر فعال نیست")
+                        .setMessage("در تنظیمات دسترس‌پذیری، سرویس آری‌ویس را خودتان فعال کنید. سپس از کاشی آری‌ویس در تنظیمات سریع گوشی فرمان دهید تا به برنامهٔ قبلی برگردیم.")
+                        .setPositiveButton("بازکردن تنظیمات") { _, _ -> startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+                        .setNegativeButton("بعداً", null).show()
                     return
                 }
                 setStatus("در حال بازگشت به برنامهٔ قبلی…")
@@ -514,17 +533,60 @@ class MainActivity : Activity() {
         }
         val query = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
         val apps = packageManager.queryIntentActivities(query, 0)
-        val wanted = CommandParser.normalize(name)
-        val match = apps.firstOrNull { CommandParser.normalize(it.loadLabel(packageManager).toString()) == wanted }
-            ?: apps.firstOrNull { CommandParser.normalize(it.loadLabel(packageManager).toString()).contains(wanted) }
-        if (match == null) { setStatus("برنامهٔ «$name» پیدا نشد. نامی را که زیر آیکون برنامه است بگویید."); return }
+            .filter { it.activityInfo.packageName != packageName }
+        val ranked = apps.map { it to AppNameMatcher.score(name, it.loadLabel(packageManager).toString()) }
+            .filter { it.second > 0 }.sortedByDescending { it.second }
+        if (ranked.firstOrNull()?.second == 100 && ranked.count { it.second == 100 } == 1) {
+            launchApp(ranked.first().first); return
+        }
+        // Explicit package visibility covers phones that hide a launcher from queryIntentActivities.
+        val normalized = CommandParser.normalize(name)
+        val savedPackage = getPreferences(MODE_PRIVATE).getString("app-alias:$normalized", null)
+        val packages = listOfNotNull(savedPackage) + AppNameMatcher.packageCandidates(name)
+        for (candidate in packages.distinct()) {
+            val intent = packageManager.getLaunchIntentForPackage(candidate) ?: continue
+            try {
+                startActivity(intent)
+                feedback("${candidate.substringAfterLast('.')} باز شد", "App opened")
+                return
+            } catch (_: Exception) { /* Try the next visible launcher. */ }
+        }
+        if (ranked.firstOrNull()?.second == 90 && ranked.count { it.second == 90 } == 1) {
+            launchApp(ranked.first().first); return
+        }
+        val choices = if (ranked.isNotEmpty()) ranked.map { it.first } else apps
+        if (choices.isEmpty()) {
+            setStatus("فهرست برنامه‌های قابل اجرا در دسترس نیست. دسترسی نمایش برنامه‌ها را در تنظیمات گوشی بررسی کنید.")
+            return
+        }
+        setStatus("نام «$name» دقیقاً پیدا نشد؛ برنامهٔ درست را از فهرست انتخاب کنید تا نام صوتی آن ذخیره شود.")
+        showAppPicker(name, choices)
+    }
+
+    private fun launchApp(app: ResolveInfo) {
+        val label = app.loadLabel(packageManager).toString()
         try {
             startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).apply {
-                component = ComponentName(match.activityInfo.packageName, match.activityInfo.name)
+                component = ComponentName(app.activityInfo.packageName, app.activityInfo.name)
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             })
-            feedback("${match.loadLabel(packageManager)} باز شد", "${match.loadLabel(packageManager)} opened")
-        } catch (_: Exception) { setStatus("باز کردن این برنامه امکان‌پذیر نیست.") }
+            feedback("$label باز شد", "$label opened")
+        } catch (_: Exception) { setStatus("بازکردن «$label» امکان‌پذیر نیست.") }
+    }
+
+    private fun showAppPicker(voiceName: String, apps: List<ResolveInfo>) {
+        val sorted = apps.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) {
+            it.loadLabel(packageManager).toString()
+        })
+        val labels = sorted.map { "${it.loadLabel(packageManager)}  (${it.activityInfo.packageName})" }.toTypedArray()
+        AlertDialog.Builder(this).setTitle("انتخاب برنامه برای «$voiceName»")
+            .setItems(labels) { _, index ->
+                val app = sorted[index]
+                getPreferences(MODE_PRIVATE).edit()
+                    .putString("app-alias:${CommandParser.normalize(voiceName)}", app.activityInfo.packageName).apply()
+                launchApp(app)
+            }
+            .setNegativeButton("انصراف", null).show()
     }
 
     private fun feedback(message: String, englishMessage: String = "Done") {

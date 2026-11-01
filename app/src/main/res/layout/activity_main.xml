@@ -32,6 +32,12 @@
             <Button android:id="@+id/run" android:layout_width="match_parent"
                 android:layout_height="wrap_content" android:layout_marginTop="8dp"
                 android:text="اجرای فرمان نوشته‌شده" android:textAllCaps="false" />
+            <TextView android:id="@+id/accessibilityState" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:layout_marginTop="14dp"
+                android:textColor="#56617B" android:textSize="13sp" />
+            <Button android:id="@+id/accessibility" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:layout_marginTop="4dp"
+                android:text="مجوز کنترل داخل برنامه‌ها (اختیاری)" android:textAllCaps="false" />
         </LinearLayout>
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="26dp" android:text="زبان فرمان صوتی" android:textSize="20sp"
@@ -51,9 +57,6 @@
         <Button android:id="@+id/importModel" android:layout_width="match_parent"
             android:layout_height="wrap_content" android:layout_marginTop="8dp"
             android:text="واردکردن مدل آفلاین (ZIP)" android:textAllCaps="false" />
-        <Button android:id="@+id/accessibility" android:layout_width="match_parent"
-            android:layout_height="wrap_content" android:layout_marginTop="4dp"
-            android:text="فعال‌کردن کنترل داخل برنامه‌ها (اختیاری)" android:textAllCaps="false" />
         <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="22dp" android:padding="18dp" android:orientation="vertical"
             android:background="@drawable/card">
