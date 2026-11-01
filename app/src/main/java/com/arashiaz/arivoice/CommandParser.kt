@@ -43,7 +43,8 @@ object CommandParser {
         // "برو اینستاگرام جستجو ardalan" must NOT become an app named "اینستاگرام جستجو ardalan".
         val withoutIntro = listOf("برو داخل ", "برو تو ", "برو به ", "باز کن ", "برو ", "توی ", "در ", "open ")
             .firstOrNull { s.startsWith(it) }?.let { s.removePrefix(it) } ?: s
-        Regex("^(.+?) (?:جستجو کن|جستجو|سرچ کن|سرچ|search for|search) (.+)$")
+        // Do not split "هوا را جستجو کن" into app="هوا را" and query="کن".
+        Regex("^(.+?) (?:جستجو کن|جستجو(?! کن$)|سرچ کن|سرچ(?! کن$)|search for|search) (.+)$")
             .matchEntire(withoutIntro)?.let { match ->
                 return inAppSearch(match.groupValues[1], match.groupValues[2])
             }
