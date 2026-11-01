@@ -14,7 +14,8 @@ android {
         versionCode = 3
         versionName = "0.3.0"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        ndk { abiFilters += listOf("arm64-v8a") }
+        // Normal phone APK stays arm64-only; opt-in x86_64 build is for CI emulator smoke tests.
+        ndk { abiFilters += if (providers.gradleProperty("emulatorBuild").isPresent) listOf("x86_64") else listOf("arm64-v8a") }
         externalNativeBuild {
             cmake { arguments += listOf("-DCMAKE_BUILD_TYPE=Release") }
         }
