@@ -28,6 +28,21 @@ class WorkflowParserTest {
             CommandParser.parse("برو اسپاتیفای و موزیک پلی کن"))
     }
 
+    @Test fun spokenCommandsWithoutConjunctionStayTwoStep() {
+        val expected = VoiceCommand.FindInApp("اینستاگرام", "ardalan")
+        assertEquals(expected, CommandParser.parse("اینستاگرام جستجو ardalan"))
+        assertEquals(expected, CommandParser.parse("باز کن اینستاگرام جستجو ardalan"))
+        assertEquals(expected, CommandParser.parse("برو اینستاگرام جستجو ardalan"))
+        assertEquals(expected, CommandParser.parse("برو تو اینستاگرام جستجو ardalan"))
+        assertEquals(expected, CommandParser.parse("برو اینستاگرام و جستجو ardalan"))
+        assertEquals(VoiceCommand.ProfileInApp("اینستاگرام", "ardalan"),
+            CommandParser.parse("اینستاگرام پروفایل ardalan رو باز کن"))
+        assertEquals(VoiceCommand.ProfileInApp("اینستاگرام", "ardalan"),
+            CommandParser.parse("برو اینستاگرام و پروفایل ardalan را جستجو کن"))
+        assertEquals(VoiceCommand.OpenApp("اینستاگرام"), CommandParser.parse("باز کن اینستاگرام"))
+        assertEquals(VoiceCommand.Search("ardalan"), CommandParser.parse("جستجو کن ardalan"))
+    }
+
     @Test fun safeDownloadAndUnknownTasks() {
         assertEquals(VoiceCommand.Download("https://example.org/music.mp3"),
             CommandParser.parse("دانلود کن https://example.org/music.mp3"))

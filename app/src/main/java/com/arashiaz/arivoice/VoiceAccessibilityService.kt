@@ -34,7 +34,7 @@ class VoiceAccessibilityService : AccessibilityService() {
         val field = when {
             marked.size == 1 -> marked.single()
             marked.size > 1 -> return SearchStep.AMBIGUOUS
-            openedSearch && fields.size == 1 -> fields.single()
+            openedSearch && fields.size == 1 && fields.single().isFocused -> fields.single()
             else -> null
         }
         if (field != null) {

@@ -39,6 +39,20 @@ object CommandParser {
         }
         if (s == "دانلود کن" || s == "دانلود" || s == "download" ||
             s.startsWith("دانلود کن ") || s.startsWith("download ")) return VoiceCommand.DownloadPrompt
+        // STT often drops the conjunction in mixed Persian/English sentences:
+        // "برو اینستاگرام جستجو ardalan" must NOT become an app named "اینستاگرام جستجو ardalan".
+        val withoutIntro = listOf("برو داخل ", "برو تو ", "برو به ", "باز کن ", "برو ", "توی ", "در ", "open ")
+            .firstOrNull { s.startsWith(it) }?.let { s.removePrefix(it) } ?: s
+        Regex("^(.+?) (?:جستجو کن|جستجو|سرچ کن|سرچ|search for|search) (.+)$")
+            .matchEntire(withoutIntro)?.let { match ->
+                return inAppSearch(match.groupValues[1], match.groupValues[2])
+            }
+        Regex("^(.+?) پروفایل(?: (.+?))? (?:را |رو )?باز کن$")
+            .matchEntire(withoutIntro)?.let { match ->
+                return value(cleanAppName(match.groupValues[1])) {
+                    VoiceCommand.ProfileInApp(it, match.groupValues[2].ifBlank { null })
+                }
+            }
         // Multi-step requests must be interpreted before generic "open app" commands.
         val compound = Regex("^(?:برو (?:تو |داخل |به )?|باز کن |open )(.*?)(?: و | and )(.*)$")
             .matchEntire(s) ?: Regex("^(.+?) برو و (.+)$").matchEntire(s)
@@ -50,12 +64,15 @@ object CommandParser {
                     return VoiceCommand.ProfileInApp(app, it.groupValues[1].ifBlank { null })
                 }
                 if (task == "پروفایل باز کن") return VoiceCommand.ProfileInApp(app, null)
+                Regex("^پروفایل (.+?) (?:را |رو )?(?:جستجو کن|سرچ کن|پیدا کن)$")
+                    .matchEntire(task)?.let { return VoiceCommand.ProfileInApp(app, it.groupValues[1]) }
                 val buy = Regex("^(.+?)\\s+(?:را|رو)?\\s*بخر$").matchEntire(task)
                 if (buy != null) return value(buy.groupValues[1]) { VoiceCommand.FindInApp(app, it, true) }
                 val find = Regex("^(.+?)\\s+(?:را|رو)?\\s*(?:پیدا کن|جستجو کن|سرچ کن)$").matchEntire(task)
-                if (find != null) return value(find.groupValues[1]) { VoiceCommand.FindInApp(app, it) }
-                if (task.startsWith("search for ")) return value(task.removePrefix("search for ")) { VoiceCommand.FindInApp(app, it) }
-                if (task.startsWith("find ")) return value(task.removePrefix("find ")) { VoiceCommand.FindInApp(app, it) }
+                if (find != null) return inAppSearch(app, find.groupValues[1])
+                for (prefix in listOf("جستجو کن ", "جستجو ", "سرچ کن ", "سرچ ", "search for ", "search ", "find ")) {
+                    if (task.startsWith(prefix)) return inAppSearch(app, task.removePrefix(prefix))
+                }
                 if (task.startsWith("open profile ")) return value(task.removePrefix("open profile ")) { VoiceCommand.ProfileInApp(app, it) }
                 if (task in listOf("موزیک پخش کن", "موزیک پلی کن", "آهنگ پخش کن", "آهنگ پلی کن", "play music")) return VoiceCommand.MediaInApp(app, MediaAction.PLAY)
                 if (task in listOf("موزیک رو قطع کن", "موزیک را قطع کن", "pause music")) return VoiceCommand.MediaInApp(app, MediaAction.PAUSE)
@@ -100,6 +117,17 @@ object CommandParser {
             return value(text) { VoiceCommand.Type(it) }
         }
         return null
+    }
+
+    private fun cleanAppName(app: String): String = app.trim().removeSuffix(" و").trim()
+
+    private fun inAppSearch(app: String, query: String): VoiceCommand? {
+        val name = cleanAppName(app)
+        val text = query.trim().removeSuffix(" را").removeSuffix(" رو").trim()
+        if (name.isBlank() || text.isBlank()) return null
+        val profile = Regex("^(?:پروفایل|profile) (.+)$").matchEntire(text)?.groupValues?.get(1)
+        return if (profile != null) VoiceCommand.ProfileInApp(name, profile)
+               else VoiceCommand.FindInApp(name, text)
     }
 
     private inline fun <T> value(value: String, create: (String) -> T): T? =

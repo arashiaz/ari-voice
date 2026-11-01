@@ -27,6 +27,7 @@ import android.widget.Button
 import android.widget.Spinner
 import android.view.View
 import android.widget.EditText
+import android.widget.Toast
 import java.io.File
 import java.net.URI
 import android.widget.TextView
@@ -45,6 +46,7 @@ class MainActivity : Activity() {
     }
 
     private val handler = Handler(Looper.getMainLooper())
+    private var workflowGeneration = 0
     private lateinit var status: TextView
     private lateinit var engineStatus: TextView
     private lateinit var accessibilityState: TextView
@@ -486,6 +488,8 @@ class MainActivity : Activity() {
     }
 
     private fun runCommand(input: String) {
+        // A new utterance supersedes any pending retries from the previous app workflow.
+        workflowGeneration++
         val parsed = CommandParser.parse(input)
         if (parsed == null) {
             if (ChatModel.installed(this)) askAi(input)
@@ -587,40 +591,51 @@ class MainActivity : Activity() {
             runCommand("جستجو کن $query")
             return
         }
+        val generation = workflowGeneration
         openApp(app) { targetPackage ->
+            if (generation != workflowGeneration) return@openApp
             setStatus("برنامه باز شد؛ در حال پیدا‌کردن جستجو برای «$query»…")
-            continueInAppSearch(targetPackage, query, profile, false, 0)
+            continueInAppSearch(targetPackage, query, profile, false, 0, generation)
         }
     }
 
     private fun continueInAppSearch(targetPackage: String, query: String, profile: Boolean,
-                                    searchOpened: Boolean, attempts: Int) {
+                                    searchOpened: Boolean, attempts: Int, generation: Int) {
         handler.postDelayed({
-            if (isDestroyed) return@postDelayed
+            if (isDestroyed || generation != workflowGeneration) return@postDelayed
             val service = VoiceAccessibilityService.active
-            if (service == null) { setStatus("کنترل صفحه قطع شد؛ جستجو ادامه نیافت."); return@postDelayed }
+            if (service == null) {
+                showWorkflowResult("کنترل صفحه قطع شد؛ جستجو ادامه نیافت.")
+                return@postDelayed
+            }
             when (service.searchInApp(targetPackage, query, searchOpened)) {
                 VoiceAccessibilityService.SearchStep.WAIT_FOR_APP,
-                VoiceAccessibilityService.SearchStep.WAIT_FOR_FIELD -> {
-                    if (attempts < 8) continueInAppSearch(targetPackage, query, profile, searchOpened, attempts + 1)
-                    else setStatus("صفحهٔ برنامه/کادر جستجو آماده نشد. اقدامی روی محصول یا پروفایل انجام نشد.")
+                VoiceAccessibilityService.SearchStep.WAIT_FOR_FIELD,
+                VoiceAccessibilityService.SearchStep.NO_SEARCH_UI -> {
+                    // Loading and tab transitions can take several seconds on real phones.
+                    // Never act on a different foreground package while waiting.
+                    if (attempts < 12) continueInAppSearch(targetPackage, query, profile, searchOpened, attempts + 1, generation)
+                    else showWorkflowResult("کادر جستجو آماده/قابل‌دسترسی نشد. چیزی نوشته یا انتخاب نشد؛ صفحه را باز کنید و دوباره امتحان کنید.")
                 }
                 VoiceAccessibilityService.SearchStep.OPENED_SEARCH ->
-                    continueInAppSearch(targetPackage, query, profile, true, attempts + 1)
+                    // A search tab may take time to render: restart the bounded retry window.
+                    continueInAppSearch(targetPackage, query, profile, true, 0, generation)
                 VoiceAccessibilityService.SearchStep.ENTERED_QUERY ->
-                    setStatus(if (profile) "نام کاربری «$query» در جستجو نوشته شد. پروفایل درست را خودتان انتخاب کنید."
-                        else "«$query» در جستجوی برنامه نوشته شد؛ برای دیدن نتایج کلید جستجو را بزنید. خرید/پرداخت خودکار انجام نمی‌شود.")
+                    showWorkflowResult(if (profile) "نام کاربری «$query» در جستجو نوشته شد. پروفایل درست را خودتان انتخاب کنید."
+                        else "«$query» نوشته شد؛ اگر نتایج نیامد کلید جستجو را بزنید. نتیجه و هر خریدی را خودتان بررسی کنید.")
                 VoiceAccessibilityService.SearchStep.SUBMITTED ->
-                    setStatus(if (profile) "جستجوی «$query» ارسال شد؛ پروفایل درست را خودتان انتخاب کنید."
+                    showWorkflowResult(if (profile) "جستجوی «$query» ارسال شد؛ پروفایل درست را خودتان انتخاب کنید."
                         else "جستجوی «$query» ارسال شد؛ نتیجه و هر خریدی را خودتان بررسی کنید.")
                 VoiceAccessibilityService.SearchStep.AMBIGUOUS ->
-                    setStatus("چند کادر یا دکمهٔ جستجو دیده شد؛ برای جلوگیری از اشتباه خودتان یکی را انتخاب کنید.")
-                VoiceAccessibilityService.SearchStep.NO_SEARCH_UI -> {
-                    if (attempts < 3) continueInAppSearch(targetPackage, query, profile, searchOpened, attempts + 1)
-                    else setStatus("کادر جستجوی قابل‌دسترسی در این برنامه پیدا نشد. هیچ خرید یا کلیکی انجام نشد.")
-                }
+                    showWorkflowResult("چند کادر یا دکمهٔ جستجو دیده شد؛ برای جلوگیری از اشتباه خودتان یکی را انتخاب کنید.")
             }
-        }, if (attempts == 0) 900 else 450)
+        }, if (attempts == 0) 1100 else 500)
+    }
+
+    private fun showWorkflowResult(message: String) {
+        setStatus(message)
+        // The assistant is behind the target app at this point; a status label alone is invisible.
+        Toast.makeText(applicationContext, message, Toast.LENGTH_LONG).show()
     }
 
     private fun sendMediaCommand(action: MediaAction) {
