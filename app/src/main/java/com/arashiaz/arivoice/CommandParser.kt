@@ -30,7 +30,7 @@ object CommandParser {
     fun parse(input: String): VoiceCommand? {
         val s = normalize(input).trimEnd('؟', '?', '.', '،')
         if (s.isBlank()) return null
-        if (s in listOf("موزیک پخش کن", "موزیک رو پخش کن", "آهنگ پخش کن", "پخش موزیک", "play music", "play song")) return VoiceCommand.Media(MediaAction.PLAY)
+        if (s in listOf("موزیک پخش کن", "موزیک رو پخش کن", "موزیک پلی کن", "آهنگ پلی کن", "آهنگ پخش کن", "موسیقی پخش کن", "پخش موزیک", "play music", "play song")) return VoiceCommand.Media(MediaAction.PLAY)
         if (s in listOf("موزیک رو قطع کن", "موزیک را قطع کن", "آهنگ رو قطع کن", "موزیک مکث", "pause music", "pause song")) return VoiceCommand.Media(MediaAction.PAUSE)
         if (s in listOf("آهنگ بعدی", "موزیک بعدی", "برو آهنگ بعدی", "next song", "next track")) return VoiceCommand.Media(MediaAction.NEXT)
         if (s in listOf("آهنگ قبلی", "موزیک قبلی", "previous song", "previous track")) return VoiceCommand.Media(MediaAction.PREVIOUS)
@@ -57,7 +57,7 @@ object CommandParser {
                 if (task.startsWith("search for ")) return value(task.removePrefix("search for ")) { VoiceCommand.FindInApp(app, it) }
                 if (task.startsWith("find ")) return value(task.removePrefix("find ")) { VoiceCommand.FindInApp(app, it) }
                 if (task.startsWith("open profile ")) return value(task.removePrefix("open profile ")) { VoiceCommand.ProfileInApp(app, it) }
-                if (task in listOf("موزیک پخش کن", "آهنگ پخش کن", "play music")) return VoiceCommand.MediaInApp(app, MediaAction.PLAY)
+                if (task in listOf("موزیک پخش کن", "موزیک پلی کن", "آهنگ پخش کن", "آهنگ پلی کن", "play music")) return VoiceCommand.MediaInApp(app, MediaAction.PLAY)
                 if (task in listOf("موزیک رو قطع کن", "موزیک را قطع کن", "pause music")) return VoiceCommand.MediaInApp(app, MediaAction.PAUSE)
             }
             // Never reinterpret an unrecognized two-step command as an app name.

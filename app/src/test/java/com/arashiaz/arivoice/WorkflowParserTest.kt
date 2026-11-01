@@ -11,6 +11,8 @@ class WorkflowParserTest {
             CommandParser.parse("دیجی کالا برو و نوشابه رو بخر"))
         assertEquals(VoiceCommand.FindInApp("دیجی کالا", "نوشابه"),
             CommandParser.parse("برو دیجی کالا و نوشابه را پیدا کن"))
+        assertEquals(VoiceCommand.FindInApp("مرورگر", "آب و هوا"),
+            CommandParser.parse("برو مرورگر و آب و هوا را جستجو کن"))
     }
 
     @Test fun profileAndMedia() {
@@ -21,6 +23,9 @@ class WorkflowParserTest {
         assertEquals(VoiceCommand.MediaInApp("اسپاتیفای", MediaAction.PLAY),
             CommandParser.parse("برو اسپاتیفای و موزیک پخش کن"))
         assertEquals(VoiceCommand.Media(MediaAction.NEXT), CommandParser.parse("آهنگ بعدی"))
+        assertEquals(VoiceCommand.Media(MediaAction.PLAY), CommandParser.parse("موزیک پلی کن"))
+        assertEquals(VoiceCommand.MediaInApp("اسپاتیفای", MediaAction.PLAY),
+            CommandParser.parse("برو اسپاتیفای و موزیک پلی کن"))
     }
 
     @Test fun safeDownloadAndUnknownTasks() {
