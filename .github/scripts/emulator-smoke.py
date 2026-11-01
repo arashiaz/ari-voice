@@ -94,6 +94,7 @@ def type_command(value):
     # Android keyboard may capitalize proper names (for example Instagram).
     if actual.casefold() != value.casefold():
         raise AssertionError(f"Typed input mismatch: wanted {value!r}, UI shows {actual!r}")
+    print("Executing typed command:", actual, flush=True)
     click(root, "run")
 
 
