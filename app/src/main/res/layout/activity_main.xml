@@ -38,6 +38,9 @@
             <Button android:id="@+id/accessibility" android:layout_width="match_parent"
                 android:layout_height="wrap_content" android:layout_marginTop="4dp"
                 android:text="مجوز کنترل داخل برنامه‌ها (اختیاری)" android:textAllCaps="false" />
+            <Button android:id="@+id/customize" android:layout_width="match_parent"
+                android:layout_height="wrap_content" android:layout_marginTop="4dp"
+                android:text="نام دلخواه برای برنامه‌های نصب‌شده" android:textAllCaps="false" />
         </LinearLayout>
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="26dp" android:text="زبان فرمان صوتی" android:textSize="20sp"
@@ -80,7 +83,7 @@
         </LinearLayout>
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="20dp" android:padding="18dp" android:background="@drawable/card"
-            android:text="نمونه فرمان‌ها\n\n«باز کن تلگرام»  •  «جستجو کن هوای تهران»\n«روی تنظیمات بزن»  •  «بنویس سلام»\n«اسکرول پایین»  •  «برو عقب»\n«open Telegram»  •  «search for weather»\n\nبرای فرمان در برنامهٔ دیگر، کاشی آری‌ویس را به تنظیمات سریع گوشی اضافه کنید. پس از شنیدن، به همان برنامه برمی‌گردیم. پیام‌ها هرگز خودکار ارسال نمی‌شوند."
+            android:text="نمونه فرمان‌ها\n\n«باز کن تلگرام»  •  «جستجو کن هوای تهران»\n«روی تنظیمات بزن»  •  «بنویس سلام»\n«اسکرول پایین»  •  «برو عقب»\n«open Telegram»  •  «search for weather»\n«برو فروشگاه من و نوشابه بخر» (فقط جستجو)\n«برو اینستاگرام و پروفایل arash رو باز کن»\n«موزیک پخش کن»  •  «دانلود کن https://…»\n\nبرای فرمان در برنامهٔ دیگر، کاشی آری‌ویس را به تنظیمات سریع گوشی اضافه کنید. پس از شنیدن، به همان برنامه برمی‌گردیم. پیام‌ها هرگز خودکار ارسال نمی‌شوند."
             android:textSize="14sp" android:lineSpacingExtra="5dp" android:textColor="#34405F" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="18dp" android:text="بدون حساب، تبلیغ یا سرور پردازش صوت. فقط دریافت اولیهٔ مدل‌ها و جستجوی وب اینترنت لازم دارند؛ گفتار و پاسخ‌ها از گوشی خارج نمی‌شوند."

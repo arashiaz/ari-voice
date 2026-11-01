@@ -1,0 +1,34 @@
+package com.arashiaz.arivoice
+
+import org.junit.Assert.*
+import org.junit.Test
+
+class WorkflowParserTest {
+    @Test fun shoppingStopsAtSearch() {
+        assertEquals(VoiceCommand.FindInApp("فروشگاه من", "نوشابه", true),
+            CommandParser.parse("برو فروشگاه من و نوشابه بخر"))
+        assertEquals(VoiceCommand.FindInApp("دیجی کالا", "نوشابه", true),
+            CommandParser.parse("دیجی کالا برو و نوشابه رو بخر"))
+        assertEquals(VoiceCommand.FindInApp("دیجی کالا", "نوشابه"),
+            CommandParser.parse("برو دیجی کالا و نوشابه را پیدا کن"))
+    }
+
+    @Test fun profileAndMedia() {
+        assertEquals(VoiceCommand.ProfileInApp("اینستاگرام", "arash"),
+            CommandParser.parse("برو اینستاگرام و پروفایل arash رو باز کن"))
+        assertEquals(VoiceCommand.ProfileInApp("اینستاگرام", null),
+            CommandParser.parse("برو اینستاگرام و پروفایل باز کن"))
+        assertEquals(VoiceCommand.MediaInApp("اسپاتیفای", MediaAction.PLAY),
+            CommandParser.parse("برو اسپاتیفای و موزیک پخش کن"))
+        assertEquals(VoiceCommand.Media(MediaAction.NEXT), CommandParser.parse("آهنگ بعدی"))
+    }
+
+    @Test fun safeDownloadAndUnknownTasks() {
+        assertEquals(VoiceCommand.Download("https://example.org/music.mp3"),
+            CommandParser.parse("دانلود کن https://example.org/music.mp3"))
+        assertEquals(VoiceCommand.DownloadPrompt,
+            CommandParser.parse("دانلود کن http://example.org/file.apk"))
+        assertEquals(VoiceCommand.DownloadPrompt, CommandParser.parse("دانلود کن"))
+        assertNull(CommandParser.parse("برو فروشگاه و پرداخت کن"))
+    }
+}

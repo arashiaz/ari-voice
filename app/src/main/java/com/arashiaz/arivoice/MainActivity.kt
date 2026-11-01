@@ -3,6 +3,7 @@ package com.arashiaz.arivoice
 import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.DownloadManager
 import android.content.ComponentName
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -12,7 +13,11 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.Environment
 import android.provider.Settings
+import android.media.AudioManager
+import android.view.KeyEvent
+import android.text.InputType
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -23,6 +28,7 @@ import android.widget.Spinner
 import android.view.View
 import android.widget.EditText
 import java.io.File
+import java.net.URI
 import android.widget.TextView
 import org.json.JSONObject
 import org.vosk.Model
@@ -142,6 +148,7 @@ class MainActivity : Activity() {
             startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS))
             setStatus("در تنظیمات، سرویس «کنترل اختیاری برنامه‌ها با آری‌ویس» را فعال کنید.")
         }
+        findViewById<Button>(R.id.customize).setOnClickListener { choosePersonalizedName() }
         tts = TextToSpeech(this) { result ->
             if (result == TextToSpeech.SUCCESS) handler.post { if (!isDestroyed) updateTtsVoice() }
         }
@@ -495,7 +502,49 @@ class MainActivity : Activity() {
                 } catch (_: Exception) { setStatus("مرورگری برای جستجو پیدا نشد.") }
             }
             is VoiceCommand.OpenApp -> openApp(parsed.name)
+            is VoiceCommand.FindInApp -> {
+                if (parsed.purchaseIntent) {
+                    AlertDialog.Builder(this).setTitle("فقط جستجو؛ بدون خرید")
+                        .setMessage("«${parsed.query}» را در «${parsed.app}» جستجو می‌کنم. هیچ کالا، سفارش یا پرداختی را انتخاب یا تأیید نمی‌کنم؛ ادامه با خود شماست.")
+                        .setPositiveButton("جستجو") { _, _ -> findInApp(parsed.app, parsed.query, false) }
+                        .setNegativeButton("انصراف", null).show()
+                } else findInApp(parsed.app, parsed.query, false)
+            }
+            is VoiceCommand.ProfileInApp -> {
+                if (parsed.username == null) {
+                    val inputField = EditText(this).apply { hint = "نام کاربری پروفایل"; isSingleLine = true }
+                    AlertDialog.Builder(this).setTitle("کدام پروفایل؟")
+                        .setView(inputField)
+                        .setPositiveButton("جستجوی پروفایل") { _, _ ->
+                            val username = inputField.text.toString().trim().removePrefix("@")
+                            if (username.isBlank()) setStatus("نام کاربری وارد نشده است.")
+                            else findInApp(parsed.app, username, true)
+                        }
+                        .setNegativeButton("انصراف", null).show()
+                } else findInApp(parsed.app, parsed.username.removePrefix("@"), true)
+            }
+            is VoiceCommand.Media -> sendMediaCommand(parsed.action)
+            is VoiceCommand.MediaInApp -> openApp(parsed.app) { _ ->
+                handler.postDelayed({ sendMediaCommand(parsed.action) }, 900)
+            }
+            is VoiceCommand.Download -> confirmDownload(parsed.url)
+            VoiceCommand.DownloadPrompt -> {
+                val link = EditText(this).apply {
+                    hint = "https://example.com/file.pdf"
+                    inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
+                    isSingleLine = true
+                }
+                AlertDialog.Builder(this).setTitle("لینک مستقیم فایل را وارد کنید")
+                    .setMessage("برای دانلود باید نشانی HTTPS فایل را بدانم؛ عبارت مبهم را به یک فایل دلخواه تبدیل نمی‌کنم.")
+                    .setView(link)
+                    .setPositiveButton("بررسی لینک") { _, _ -> confirmDownload(link.text.toString().trim()) }
+                    .setNegativeButton("انصراف", null).show()
+            }
             else -> {
+                if (parsed is VoiceCommand.Tap && SensitiveActionPolicy.isUnsafeClick(parsed.label)) {
+                    setStatus("لمس صوتیِ دکمه‌های خرید، پرداخت، تأیید یا ارسال غیرفعال است؛ این کار را خودتان انجام دهید.")
+                    return
+                }
                 if (VoiceAccessibilityService.active == null) {
                     setStatus("برای لمس/نوشتن در برنامهٔ دیگر، سرویس دسترس‌پذیری آری‌ویس باید فعال باشد.")
                     AlertDialog.Builder(this).setTitle("کنترل برنامه‌های دیگر فعال نیست")
@@ -522,11 +571,139 @@ class MainActivity : Activity() {
         }, if (attempt == 0) 600 else 350)
     }
 
-    private fun openApp(name: String) {
+    private fun findInApp(app: String, query: String, profile: Boolean) {
+        if (VoiceAccessibilityService.active == null) {
+            setStatus("برای جستجو در برنامه‌های دیگر، سرویس دسترس‌پذیری را فعال کنید؛ بازکردن سادهٔ اپ به آن نیاز ندارد.")
+            AlertDialog.Builder(this).setTitle("مجوز لازم است")
+                .setMessage("کنترل صفحه فقط پس از فعال‌سازی دستی سرویس آری‌ویس در تنظیمات دسترس‌پذیری ممکن است.")
+                .setPositiveButton("تنظیمات") { _, _ -> startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
+                .setNegativeButton("بعداً", null).show()
+            return
+        }
+        if (query.isBlank()) { setStatus("عبارت جستجو خالی است."); return }
+        val normalized = CommandParser.normalize(app)
+        if (normalized in listOf("مرورگر", "browser")) {
+            // Browsers are better handled by a standard web intent than by inspecting their UI.
+            runCommand("جستجو کن $query")
+            return
+        }
+        openApp(app) { targetPackage ->
+            setStatus("برنامه باز شد؛ در حال پیدا‌کردن جستجو برای «$query»…")
+            continueInAppSearch(targetPackage, query, profile, false, 0)
+        }
+    }
+
+    private fun continueInAppSearch(targetPackage: String, query: String, profile: Boolean,
+                                    searchOpened: Boolean, attempts: Int) {
+        handler.postDelayed({
+            if (isDestroyed) return@postDelayed
+            val service = VoiceAccessibilityService.active
+            if (service == null) { setStatus("کنترل صفحه قطع شد؛ جستجو ادامه نیافت."); return@postDelayed }
+            when (service.searchInApp(targetPackage, query, searchOpened)) {
+                VoiceAccessibilityService.SearchStep.WAIT_FOR_APP,
+                VoiceAccessibilityService.SearchStep.WAIT_FOR_FIELD -> {
+                    if (attempts < 8) continueInAppSearch(targetPackage, query, profile, searchOpened, attempts + 1)
+                    else setStatus("صفحهٔ برنامه/کادر جستجو آماده نشد. اقدامی روی محصول یا پروفایل انجام نشد.")
+                }
+                VoiceAccessibilityService.SearchStep.OPENED_SEARCH ->
+                    continueInAppSearch(targetPackage, query, profile, true, attempts + 1)
+                VoiceAccessibilityService.SearchStep.ENTERED_QUERY ->
+                    setStatus(if (profile) "نام کاربری «$query» در جستجو نوشته شد. پروفایل درست را خودتان انتخاب کنید."
+                        else "«$query» در جستجوی برنامه نوشته شد؛ برای دیدن نتایج کلید جستجو را بزنید. خرید/پرداخت خودکار انجام نمی‌شود.")
+                VoiceAccessibilityService.SearchStep.SUBMITTED ->
+                    setStatus(if (profile) "جستجوی «$query» ارسال شد؛ پروفایل درست را خودتان انتخاب کنید."
+                        else "جستجوی «$query» ارسال شد؛ نتیجه و هر خریدی را خودتان بررسی کنید.")
+                VoiceAccessibilityService.SearchStep.AMBIGUOUS ->
+                    setStatus("چند کادر یا دکمهٔ جستجو دیده شد؛ برای جلوگیری از اشتباه خودتان یکی را انتخاب کنید.")
+                VoiceAccessibilityService.SearchStep.NO_SEARCH_UI -> {
+                    if (attempts < 3) continueInAppSearch(targetPackage, query, profile, searchOpened, attempts + 1)
+                    else setStatus("کادر جستجوی قابل‌دسترسی در این برنامه پیدا نشد. هیچ خرید یا کلیکی انجام نشد.")
+                }
+            }
+        }, if (attempts == 0) 900 else 450)
+    }
+
+    private fun sendMediaCommand(action: MediaAction) {
+        val key = when (action) {
+            MediaAction.PLAY -> KeyEvent.KEYCODE_MEDIA_PLAY
+            MediaAction.PAUSE -> KeyEvent.KEYCODE_MEDIA_PAUSE
+            MediaAction.NEXT -> KeyEvent.KEYCODE_MEDIA_NEXT
+            MediaAction.PREVIOUS -> KeyEvent.KEYCODE_MEDIA_PREVIOUS
+        }
+        try {
+            val audio = getSystemService(AUDIO_SERVICE) as AudioManager
+            audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, key))
+            audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, key))
+            setStatus("فرمان به پلیر فعال فرستاده شد. اگر پلیر از کنترل رسانه پشتیبانی نکند ممکن است اجرا نشود.")
+        } catch (_: Exception) { setStatus("کنترل رسانه روی این گوشی یا این پلیر در دسترس نیست.") }
+    }
+
+    private fun confirmDownload(url: String) {
+        val parsed = runCatching { URI(url) }.getOrNull()
+        if (parsed?.scheme != "https" || parsed.host.isNullOrBlank() || parsed.rawUserInfo != null) {
+            setStatus("دانلود فقط با لینک مستقیم HTTPS معتبر پذیرفته می‌شود.")
+            return
+        }
+        val host = parsed.host ?: return
+        val rawName = parsed.path?.substringAfterLast('/')?.take(80).orEmpty()
+        val safeName = rawName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
+            .takeIf { it.isNotBlank() && it != "." && it != ".." } ?: "ari-download"
+        AlertDialog.Builder(this).setTitle("تأیید دانلود")
+            .setMessage("فایل از $host در پوشهٔ دانلودها ذخیره می‌شود. از امن‌بودن منبع مطمئن شوید؛ فایل اجرا یا نصب نمی‌شود. ادامه؟")
+            .setPositiveButton("دانلود") { _, _ ->
+                try {
+                    val name = "ari-${System.currentTimeMillis()}-$safeName"
+                    val request = DownloadManager.Request(Uri.parse(url))
+                        .setTitle(name)
+                        .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+                    if (Build.VERSION.SDK_INT >= 29) request.setDestinationInExternalPublicDir(Environment.DIRECTORY_DOWNLOADS, name)
+                    else request.setDestinationInExternalFilesDir(this, Environment.DIRECTORY_DOWNLOADS, name)
+                    (getSystemService(DOWNLOAD_SERVICE) as DownloadManager).enqueue(request)
+                    setStatus("دانلود شروع شد؛ نتیجه را در اعلان‌ها یا برنامهٔ فایل‌ها بررسی کنید.")
+                } catch (e: Exception) { setStatus("شروع دانلود ناموفق بود: ${e.message}") }
+            }
+            .setNegativeButton("انصراف", null).show()
+    }
+
+    private fun choosePersonalizedName() {
+        val apps = packageManager.queryIntentActivities(
+            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0
+        ).filter { it.activityInfo.packageName != packageName }
+            .distinctBy { it.activityInfo.packageName }
+            .sortedBy { it.loadLabel(packageManager).toString().lowercase() }
+        if (apps.isEmpty()) { setStatus("فهرست برنامه‌های نصب‌شده قابل‌خواندن نیست."); return }
+        val labels = apps.map { "${it.loadLabel(packageManager)} (${it.activityInfo.packageName})" }.toTypedArray()
+        AlertDialog.Builder(this).setTitle("برای کدام برنامه نام دلخواه می‌خواهید؟")
+            .setItems(labels) { _, index ->
+                val chosen = apps[index]
+                val input = EditText(this).apply {
+                    hint = "مثلاً فروشگاه من"
+                    inputType = InputType.TYPE_CLASS_TEXT
+                    isSingleLine = true
+                }
+                AlertDialog.Builder(this).setTitle("نام صوتی برای ${chosen.loadLabel(packageManager)}")
+                    .setView(input)
+                    .setPositiveButton("ذخیره") { _, _ ->
+                        val alias = CommandParser.normalize(input.text.toString())
+                        if (alias.isBlank() || alias.length > 40 || alias in listOf("تنظیمات", "settings", "مرورگر", "browser")) {
+                            setStatus("نام دلخواه نامعتبر یا رزروشده است.")
+                        } else {
+                            getPreferences(MODE_PRIVATE).edit()
+                                .putString("app-alias:$alias", chosen.activityInfo.packageName).apply()
+                            setStatus("نام «$alias» برای ${chosen.loadLabel(packageManager)} ذخیره شد؛ بگویید «باز کن $alias».")
+                        }
+                    }
+                    .setNegativeButton("انصراف", null).show()
+            }.setNegativeButton("انصراف", null).show()
+    }
+
+    private fun openApp(name: String, onLaunched: ((String) -> Unit)? = null) {
         if (name in listOf("تنظیمات", "settings")) {
+            if (onLaunched != null) { setStatus("اجرای فرمان چندگامی در تنظیمات پشتیبانی نمی‌شود."); return }
             startActivity(Intent(Settings.ACTION_SETTINGS)); feedback("تنظیمات باز شد", "Settings opened"); return
         }
         if (name in listOf("مرورگر", "browser")) {
+            if (onLaunched != null) { setStatus("برای مرورگر بگویید «جستجو کن ...»."); return }
             try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com"))); feedback("مرورگر باز شد", "Browser opened") }
             catch (_: Exception) { setStatus("مرورگری پیدا نشد.") }
             return
@@ -536,23 +713,31 @@ class MainActivity : Activity() {
             .filter { it.activityInfo.packageName != packageName }
         val ranked = apps.map { it to AppNameMatcher.score(name, it.loadLabel(packageManager).toString()) }
             .filter { it.second > 0 }.sortedByDescending { it.second }
-        if (ranked.firstOrNull()?.second == 100 && ranked.count { it.second == 100 } == 1) {
-            launchApp(ranked.first().first); return
-        }
-        // Explicit package visibility covers phones that hide a launcher from queryIntentActivities.
+        // A user-defined local nickname takes precedence over any automatic label match.
         val normalized = CommandParser.normalize(name)
         val savedPackage = getPreferences(MODE_PRIVATE).getString("app-alias:$normalized", null)
+        if (savedPackage == null && ranked.firstOrNull()?.second == 100 && ranked.count { it.second == 100 } == 1) {
+            launchApp(ranked.first().first, onLaunched); return
+        }
+        // Explicit package visibility covers phones that hide a launcher from queryIntentActivities.
         val packages = listOfNotNull(savedPackage) + AppNameMatcher.packageCandidates(name)
         for (candidate in packages.distinct()) {
-            val intent = packageManager.getLaunchIntentForPackage(candidate) ?: continue
+            val intent = packageManager.getLaunchIntentForPackage(candidate)
+            if (intent == null) {
+                val visible = apps.firstOrNull { it.activityInfo.packageName == candidate }
+                if (visible != null) { launchApp(visible, onLaunched); return }
+                continue
+            }
             try {
                 startActivity(intent)
                 feedback("${candidate.substringAfterLast('.')} باز شد", "App opened")
+                onLaunched?.invoke(candidate)
                 return
             } catch (_: Exception) { /* Try the next visible launcher. */ }
         }
-        if (ranked.firstOrNull()?.second == 90 && ranked.count { it.second == 90 } == 1) {
-            launchApp(ranked.first().first); return
+        val topScore = ranked.firstOrNull()?.second
+        if (topScore != null && topScore >= 90 && ranked.count { it.second == topScore } == 1) {
+            launchApp(ranked.first().first, onLaunched); return
         }
         val choices = if (ranked.isNotEmpty()) ranked.map { it.first } else apps
         if (choices.isEmpty()) {
@@ -560,10 +745,10 @@ class MainActivity : Activity() {
             return
         }
         setStatus("نام «$name» دقیقاً پیدا نشد؛ برنامهٔ درست را از فهرست انتخاب کنید تا نام صوتی آن ذخیره شود.")
-        showAppPicker(name, choices)
+        showAppPicker(name, choices, onLaunched)
     }
 
-    private fun launchApp(app: ResolveInfo) {
+    private fun launchApp(app: ResolveInfo, onLaunched: ((String) -> Unit)? = null) {
         val label = app.loadLabel(packageManager).toString()
         try {
             startActivity(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER).apply {
@@ -571,10 +756,11 @@ class MainActivity : Activity() {
                 flags = Intent.FLAG_ACTIVITY_NEW_TASK
             })
             feedback("$label باز شد", "$label opened")
+            onLaunched?.invoke(app.activityInfo.packageName)
         } catch (_: Exception) { setStatus("بازکردن «$label» امکان‌پذیر نیست.") }
     }
 
-    private fun showAppPicker(voiceName: String, apps: List<ResolveInfo>) {
+    private fun showAppPicker(voiceName: String, apps: List<ResolveInfo>, onLaunched: ((String) -> Unit)? = null) {
         val sorted = apps.sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) {
             it.loadLabel(packageManager).toString()
         })
@@ -584,7 +770,7 @@ class MainActivity : Activity() {
                 val app = sorted[index]
                 getPreferences(MODE_PRIVATE).edit()
                     .putString("app-alias:${CommandParser.normalize(voiceName)}", app.activityInfo.packageName).apply()
-                launchApp(app)
+                launchApp(app, onLaunched)
             }
             .setNegativeButton("انصراف", null).show()
     }

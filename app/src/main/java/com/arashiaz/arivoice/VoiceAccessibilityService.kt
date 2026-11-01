@@ -4,6 +4,7 @@ import android.accessibilityservice.AccessibilityService
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.os.Bundle
+import android.os.Build
 
 /** Only used after the user explicitly enables the service in system settings. */
 class VoiceAccessibilityService : AccessibilityService() {
@@ -20,8 +21,72 @@ class VoiceAccessibilityService : AccessibilityService() {
         super.onDestroy()
     }
 
+    enum class SearchStep { WAIT_FOR_APP, OPENED_SEARCH, WAIT_FOR_FIELD, ENTERED_QUERY, SUBMITTED, AMBIGUOUS, NO_SEARCH_UI }
+
+    /** Search in an explicitly selected app. Never click a product, purchase, checkout or payment control. */
+    fun searchInApp(targetPackage: String, query: String, openedSearch: Boolean): SearchStep {
+        val root = rootInActiveWindow ?: return SearchStep.WAIT_FOR_APP
+        if (root.packageName?.toString() != targetPackage) return SearchStep.WAIT_FOR_APP
+        if (query.isBlank() || query.length > 200) return SearchStep.NO_SEARCH_UI
+        val fields = mutableListOf<AccessibilityNodeInfo>()
+        collectEditable(root, fields)
+        val marked = fields.filter { isSearchField(it) }
+        val field = when {
+            marked.size == 1 -> marked.single()
+            marked.size > 1 -> return SearchStep.AMBIGUOUS
+            openedSearch && fields.size == 1 -> fields.single()
+            else -> null
+        }
+        if (field != null) {
+            val success = field.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, Bundle().apply {
+                putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, query)
+            })
+            if (!success) return SearchStep.NO_SEARCH_UI
+            // Only submit a field explicitly marked as search or revealed by a Search button.
+            if (Build.VERSION.SDK_INT >= 30 &&
+                field.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)) {
+                return SearchStep.SUBMITTED
+            }
+            return SearchStep.ENTERED_QUERY
+        }
+        if (openedSearch) return SearchStep.WAIT_FOR_FIELD
+        val buttons = mutableListOf<AccessibilityNodeInfo>()
+        collectSearchButtons(root, buttons)
+        if (buttons.size > 1) return SearchStep.AMBIGUOUS
+        if (buttons.size == 1 && buttons.single().performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+            return SearchStep.OPENED_SEARCH
+        }
+        return SearchStep.NO_SEARCH_UI
+    }
+
+    private fun collectEditable(node: AccessibilityNodeInfo, fields: MutableList<AccessibilityNodeInfo>) {
+        if (!node.isVisibleToUser) return
+        if (node.isEditable && !node.isPassword) fields.add(node)
+        for (index in 0 until node.childCount) node.getChild(index)?.let { collectEditable(it, fields) }
+    }
+
+    private fun isSearchField(node: AccessibilityNodeInfo): Boolean = listOfNotNull(
+        node.hintText, node.contentDescription, node.viewIdResourceName
+    ).any { CommandParser.normalize(it.toString()).let { hint ->
+        hint.contains("search") || hint.contains("جستجو") || hint.contains("جست و جو") || hint.contains("سرچ")
+    } }
+
+    private fun collectSearchButtons(node: AccessibilityNodeInfo, buttons: MutableList<AccessibilityNodeInfo>) {
+        if (!node.isVisibleToUser) return
+        val names = listOfNotNull(node.text, node.contentDescription).map { CommandParser.normalize(it.toString()) }
+        if (names.any { it in setOf("search", "جستجو", "جست و جو", "سرچ", "search products", "جستجوی محصولات") }) {
+            var clickable: AccessibilityNodeInfo? = node
+            while (clickable != null && !clickable.isClickable) clickable = clickable.parent
+            val target = clickable
+            if (target != null && target.isVisibleToUser && !target.isPassword &&
+                buttons.none { it == target }) buttons.add(target)
+        }
+        for (index in 0 until node.childCount) node.getChild(index)?.let { collectSearchButtons(it, buttons) }
+    }
+
     fun execute(command: VoiceCommand): Boolean = when (command) {
         is VoiceCommand.Tap -> withRoot { root ->
+            if (SensitiveActionPolicy.isUnsafeClick(command.label)) return@withRoot false
             val matches = mutableListOf<AccessibilityNodeInfo>()
             collectMatches(root, CommandParser.normalize(command.label), matches)
             // Never guess when multiple controls with the same label are visible.
