@@ -16,6 +16,7 @@ internal object FollowUpParser {
         val normalized = CommandParser.normalize(input).trimEnd('؟', '?', '.', '،')
         val intro = references.firstOrNull { normalized.startsWith(it) } ?: return null
         val task = normalized.removePrefix(intro).trim()
+        if (task in listOf("جستجو کن", "سرچ کن", "search for", "search")) return null
         val query = listOf("جستجو کن ", "جستجو ", "سرچ کن ", "سرچ ", "search for ", "search ")
             .firstOrNull { task.startsWith(it) }?.let { task.removePrefix(it) }
             ?: Regex("^(.+?) (?:را |رو )?(?:جستجو کن|سرچ کن|پیدا کن)$")
