@@ -49,6 +49,13 @@
                     <Button android:id="@+id/run" android:layout_width="match_parent"
                         android:layout_height="52dp" android:layout_marginTop="8dp"
                         android:text="اجرای فرمان نوشته‌شده" android:textAllCaps="false" />
+                    <Button android:id="@+id/askAi" android:layout_width="match_parent"
+                        android:layout_height="52dp" android:layout_marginTop="6dp"
+                        android:text="پرسیدن سؤال آفلاین (مدل اختیاری)" android:textAllCaps="false" />
+                    <TextView android:id="@+id/aiResponse" android:layout_width="match_parent"
+                        android:layout_height="wrap_content" android:layout_marginTop="12dp"
+                        android:textIsSelectable="true" android:textColor="@color/text_primary"
+                        android:textSize="16sp" />
                 </LinearLayout>
                 <LinearLayout android:orientation="vertical" android:padding="18dp"
                     android:layout_marginTop="16dp" android:background="@drawable/card"
@@ -110,6 +117,14 @@
                 <Button android:id="@+id/customize" android:layout_width="match_parent"
                     android:layout_height="52dp" android:layout_marginTop="16dp"
                     android:text="انتخاب اپ و تنظیم نام صوتی دلخواه" android:textAllCaps="false" />
+                <Button android:id="@+id/removeNickname" android:layout_width="match_parent"
+                    android:layout_height="48dp" android:layout_marginTop="6dp"
+                    android:text="حذف نام صوتیِ ذخیره‌شده" android:textAllCaps="false" />
+                <TextView android:id="@+id/installedApps" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:layout_marginTop="16dp"
+                    android:padding="18dp" android:background="@drawable/card"
+                    android:textColor="@color/text_primary" android:textSize="15sp"
+                    android:lineSpacingExtra="5dp" />
             </LinearLayout>
 
             <LinearLayout android:id="@+id/settingsPanel" android:orientation="vertical"
@@ -152,13 +167,9 @@
                     <Button android:id="@+id/importAi" android:layout_width="match_parent"
                         android:layout_height="52dp" android:text="واردکردن مدل GGUF از فایل"
                         android:textAllCaps="false" />
-                    <Button android:id="@+id/askAi" android:layout_width="match_parent"
-                        android:layout_height="52dp" android:text="پرسیدن از هوش مصنوعی (متن صفحهٔ خانه)"
-                        android:textAllCaps="false" />
-                    <TextView android:id="@+id/aiResponse" android:layout_width="match_parent"
-                        android:layout_height="wrap_content" android:layout_marginTop="12dp"
-                        android:textIsSelectable="true" android:textColor="@color/text_primary"
-                        android:textSize="16sp" />
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:layout_marginTop="8dp" android:text="سؤال را از صفحهٔ خانه بپرسید؛ این مدل هیچ فرمانی را در گوشی اجرا نمی‌کند."
+                        android:textColor="@color/text_secondary" android:textSize="14sp" />
                 </LinearLayout>
                 <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
                     android:layout_marginTop="18dp" android:text="هیچ حسابی لازم نیست. مدل‌ها در APK نیستند و فقط با تأیید شما دریافت می‌شوند. جستجوی وب و اپ‌های آنلاین به اینترنت گوشی نیاز دارند."

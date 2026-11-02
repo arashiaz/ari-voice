@@ -106,15 +106,26 @@ class VoiceAccessibilityService : AccessibilityService() {
             collectMatches(root, CommandParser.normalize(command.label), matches)
             // Never guess when multiple controls with the same label are visible.
             if (matches.size != 1) false else {
-                var node: AccessibilityNodeInfo? = matches.single()
-                var clicked = false
-                while (node != null && !clicked) {
-                    if (node.isClickable && node.isVisibleToUser && !node.isPassword) {
-                        clicked = node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                    }
-                    node = node.parent
+                val selected = matches.single()
+                // A harmless-looking child could sit inside a payment or send button.
+                var ancestor: AccessibilityNodeInfo? = selected
+                var unsafe = false
+                while (ancestor != null) {
+                    if (ancestor.isPassword || listOfNotNull(ancestor.text, ancestor.contentDescription).any {
+                        SensitiveActionPolicy.isUnsafeClick(it.toString())
+                    }) unsafe = true
+                    ancestor = ancestor.parent
                 }
-                clicked
+                if (unsafe) false else {
+                    var node: AccessibilityNodeInfo? = selected
+                    var clicked = false
+                    while (node != null && !clicked) {
+                        if (node.isClickable && node.isVisibleToUser && !node.isPassword)
+                            clicked = node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                        node = node.parent
+                    }
+                    clicked
+                }
             }
         }
         is VoiceCommand.Type -> withRoot { root ->

@@ -102,6 +102,17 @@ print(adb("devices", "-l").stdout)
 print("Installing test APK (x86_64, not the arm64 phone artifact)")
 print(adb("install", "-r", "app/build/outputs/apk/debug/app-debug.apk").stdout)
 
+# Check the four-section navigation without models, microphone or third-party apps.
+root = launch()
+click(root, "navActivity")
+root = wait_for(lambda ui: node_by_id(ui, "activityLog") is not None, "activity history panel")
+click(root, "navApps")
+root = wait_for(lambda ui: node_by_id(ui, "installedApps") is not None, "installed apps panel")
+click(root, "navSettings")
+root = wait_for(lambda ui: node_by_id(ui, "downloadVoice") is not None, "offline model settings panel")
+click(root, "navHome")
+wait_for(lambda ui: node_by_id(ui, "command") is not None, "assistant home screen")
+
 # This is a real Android activity launch using the installed APK.
 type_command("open settings")
 active = []

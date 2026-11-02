@@ -13,6 +13,7 @@ import android.os.Build
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.os.SystemClock
 import android.os.Environment
 import android.provider.Settings
 import android.media.AudioManager
@@ -49,6 +50,8 @@ class MainActivity : Activity() {
     private val handler = Handler(Looper.getMainLooper())
     private var workflowGeneration = 0
     private val workflowHistory = WorkflowHistory()
+    private data class RecentApp(val name: String, val openedAt: Long)
+    private var recentApp: RecentApp? = null
     private lateinit var status: TextView
     private lateinit var engineStatus: TextView
     private lateinit var accessibilityState: TextView
@@ -162,6 +165,7 @@ class MainActivity : Activity() {
             setStatus("در تنظیمات، سرویس «کنترل اختیاری برنامه‌ها با آری‌ویس» را فعال کنید.")
         }
         findViewById<Button>(R.id.customize).setOnClickListener { choosePersonalizedName() }
+        findViewById<Button>(R.id.removeNickname).setOnClickListener { removePersonalizedName() }
         tts = TextToSpeech(this) { result ->
             if (result == TextToSpeech.SUCCESS) handler.post { if (!isDestroyed) updateTtsVoice() }
         }
@@ -202,6 +206,7 @@ class MainActivity : Activity() {
                     findViewById<View>(panel).visibility = if (section == index) View.VISIBLE else View.GONE
                 }
                 findViewById<TextView>(R.id.pageTitle).text = titles[index]
+                if (index == 2) updateAppsPanel()
                 findViewById<ScrollView>(R.id.mainScroll).scrollTo(0, 0)
                 renderWorkflow()
             }
@@ -231,7 +236,10 @@ class MainActivity : Activity() {
 
     private fun markWorkflow(stage: WorkflowHistory.Stage, description: String,
                              done: Boolean = false, generation: Int = workflowGeneration) {
-        if (workflowHistory.advance(generation, stage, description, done)) renderWorkflow()
+        if (workflowHistory.advance(generation, stage, description, done)) {
+            if (stage == WorkflowHistory.Stage.STOPPED || stage == WorkflowHistory.Stage.CANCELLED) recentApp = null
+            renderWorkflow()
+        }
     }
 
     private fun cancelActiveWorkflow() {
@@ -239,6 +247,7 @@ class MainActivity : Activity() {
         if (current.finished) return
         workflowGeneration++ // queued retries and delayed media actions must not resume.
         workflowHistory.cancel(current.id)
+        recentApp = null
         setStatus("ادامهٔ فرمان لغو شد. اگر مرحله‌ای قبلاً انجام شده، لغو آن در اپ مقصد خودکار نیست.")
         renderWorkflow()
     }
@@ -331,7 +340,8 @@ class MainActivity : Activity() {
     private fun askAi(question: String) {
         if (question.isBlank()) { aiStatus.text = "ابتدا سؤال خود را در کادر بالا بنویسید یا بگویید."; return }
         if (!ChatModel.installed(this)) {
-            aiStatus.text = "مدل هوش مصنوعی نصب نیست. دکمهٔ دریافت یا واردکردن مدل GGUF را بزنید."
+            aiStatus.text = "مدل هوش مصنوعی نصب نیست. در تنظیمات آن را دریافت یا وارد کنید."
+            setStatus("مدل پرسش و پاسخ نصب نیست؛ از بخش تنظیمات آن را به‌صورت اختیاری دریافت کنید.")
             return
         }
         if (aiBusy || downloadBusy) return
@@ -372,6 +382,7 @@ class MainActivity : Activity() {
 
     private fun requestMicrophoneAndListen() {
         if (loading || listening || downloadBusy || aiBusy) return
+        if (workflowHistory.current?.finished == false) cancelActiveWorkflow()
         if (checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             requestPermissions(arrayOf(Manifest.permission.RECORD_AUDIO), REQUEST_AUDIO)
         } else startListening()
@@ -553,9 +564,17 @@ class MainActivity : Activity() {
     private fun runCommand(input: String) {
         // A new utterance supersedes any pending retries from the previous app workflow.
         workflowGeneration++
-        val parsed = CommandParser.parse(input)
+        val isFollowUp = FollowUpParser.referencesPreviousApp(input)
+        val context = recentApp?.takeIf { SystemClock.elapsedRealtime() - it.openedAt < 90_000L }
+        if (!isFollowUp) recentApp = null
+        val parsed = if (isFollowUp) context?.let { FollowUpParser.parse(input, it.name) }
+                     else CommandParser.parse(input)
         if (parsed == null) {
             workflowHistory.current?.takeIf { !it.finished }?.let { workflowHistory.cancel(it.id); renderWorkflow() }
+            if (isFollowUp) {
+                setStatus("برنامهٔ قبلی مشخص نیست یا این ادامه پشتیبانی نمی‌شود؛ نام اپ و عبارت جستجو را کامل بگویید.")
+                return
+            }
             if (ChatModel.installed(this)) askAi(input)
             else setStatus("فرمان را نشناختم. برای سؤال آزاد ابتدا مدل هوش مصنوعی را دریافت کنید.")
             return
@@ -576,7 +595,9 @@ class MainActivity : Activity() {
                     markWorkflow(WorkflowHistory.Stage.STOPPED, "مرورگر پیدا نشد", true, generation)
                 }
             }
-            is VoiceCommand.OpenApp -> openApp(parsed.name) { _ ->
+            is VoiceCommand.OpenApp -> openApp(parsed.name) { targetPackage ->
+                if (generation == workflowGeneration && targetPackage !in listOf("browser", "com.android.settings"))
+                    recentApp = RecentApp(parsed.name, SystemClock.elapsedRealtime())
                 markWorkflow(WorkflowHistory.Stage.HANDOFF, "برنامه باز شد؛ کار دیگری درخواست نشده بود", true, generation)
             }
             is VoiceCommand.FindInApp -> {
@@ -709,6 +730,7 @@ class MainActivity : Activity() {
             if (generation != workflowGeneration) return@openApp
             setStatus("برنامه باز شد؛ در حال پیدا‌کردن جستجو برای «$query»…")
             markWorkflow(WorkflowHistory.Stage.APP_OPENED, "برنامه باز شد؛ جستجو هنوز انجام نشده است", generation = generation)
+            recentApp = RecentApp(app, SystemClock.elapsedRealtime())
             continueInAppSearch(targetPackage, query, profile, mutableSetOf(), 0, generation)
         }
     }
@@ -825,12 +847,43 @@ class MainActivity : Activity() {
             .setNegativeButton("انصراف") { _, _ -> cancelActiveWorkflow() }.show()
     }
 
+    private fun launcherApps(): List<ResolveInfo> = packageManager.queryIntentActivities(
+        Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0
+    ).filter { it.activityInfo.packageName != packageName }
+        .distinctBy { it.activityInfo.packageName }
+        .sortedBy { it.loadLabel(packageManager).toString().lowercase() }
+
+    private fun savedAliases(): List<Pair<String, String>> = getPreferences(MODE_PRIVATE).all
+        .mapNotNull { (key, value) ->
+            if (key.startsWith("app-alias:") && value is String) key.removePrefix("app-alias:") to value
+            else null
+        }.sortedBy { it.first }
+
+    private fun updateAppsPanel() {
+        val apps = launcherApps()
+        val labels = apps.associate { it.activityInfo.packageName to it.loadLabel(packageManager).toString() }
+        val aliases = savedAliases().map { (alias, pkg) -> "$alias ← ${labels[pkg] ?: "اپِ دیگر"}" }
+        val preview = apps.take(12).joinToString("، ") { it.loadLabel(packageManager).toString() }
+        findViewById<TextView>(R.id.installedApps).text =
+            "اپ‌های قابل‌اجرای دیده‌شده: ${apps.size}\n" +
+            (if (preview.isEmpty()) "فعلاً فهرستی دیده نشد." else "$preview${if (apps.size > 12) " …" else ""}") +
+            "\n\nنام‌های صوتی شما:\n" +
+            (if (aliases.isEmpty()) "هنوز نام دلخواهی ذخیره نشده است." else aliases.joinToString("\n"))
+    }
+
+    private fun removePersonalizedName() {
+        val aliases = savedAliases()
+        if (aliases.isEmpty()) { setStatus("نام صوتی ذخیره‌شده‌ای برای حذف وجود ندارد."); return }
+        AlertDialog.Builder(this).setTitle("کدام نام صوتی حذف شود؟")
+            .setItems(aliases.map { it.first }.toTypedArray()) { _, index ->
+                getPreferences(MODE_PRIVATE).edit().remove("app-alias:${aliases[index].first}").apply()
+                setStatus("نام صوتی دلخواه حذف شد؛ اپ از گوشی حذف نشده است.")
+                updateAppsPanel()
+            }.setNegativeButton("انصراف", null).show()
+    }
+
     private fun choosePersonalizedName() {
-        val apps = packageManager.queryIntentActivities(
-            Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0
-        ).filter { it.activityInfo.packageName != packageName }
-            .distinctBy { it.activityInfo.packageName }
-            .sortedBy { it.loadLabel(packageManager).toString().lowercase() }
+        val apps = launcherApps()
         if (apps.isEmpty()) { setStatus("فهرست برنامه‌های نصب‌شده قابل‌خواندن نیست."); return }
         val labels = apps.map { "${it.loadLabel(packageManager)} (${it.activityInfo.packageName})" }.toTypedArray()
         AlertDialog.Builder(this).setTitle("برای کدام برنامه نام دلخواه می‌خواهید؟")
@@ -845,16 +898,29 @@ class MainActivity : Activity() {
                     .setView(input)
                     .setPositiveButton("ذخیره") { _, _ ->
                         val alias = CommandParser.normalize(input.text.toString())
-                        if (alias.isBlank() || alias.length > 40 || alias in listOf("تنظیمات", "settings", "مرورگر", "browser")) {
-                            setStatus("نام دلخواه نامعتبر یا رزروشده است.")
+                        if (alias.isBlank() || alias.length > 40 ||
+                            alias in listOf("تنظیمات", "settings", "مرورگر", "browser") ||
+                            CommandParser.parse("باز کن $alias") != VoiceCommand.OpenApp(alias)) {
+                            setStatus("نام دلخواه نامعتبر است یا شبیه یک فرمانِ دیگر فهمیده می‌شود.")
                         } else {
-                            getPreferences(MODE_PRIVATE).edit()
-                                .putString("app-alias:$alias", chosen.activityInfo.packageName).apply()
-                            setStatus("نام «$alias» برای ${chosen.loadLabel(packageManager)} ذخیره شد؛ بگویید «باز کن $alias».")
+                            val previous = getPreferences(MODE_PRIVATE).getString("app-alias:$alias", null)
+                            if (previous != null && previous != chosen.activityInfo.packageName) {
+                                AlertDialog.Builder(this).setTitle("این نام قبلاً استفاده شده")
+                                    .setMessage("آیا نام «$alias» را به برنامهٔ جدید منتقل کنم؟")
+                                    .setPositiveButton("جایگزینی") { _, _ -> saveAlias(alias, chosen) }
+                                    .setNegativeButton("انصراف", null).show()
+                            } else saveAlias(alias, chosen)
                         }
                     }
                     .setNegativeButton("انصراف", null).show()
             }.setNegativeButton("انصراف", null).show()
+    }
+
+    private fun saveAlias(alias: String, chosen: ResolveInfo) {
+        getPreferences(MODE_PRIVATE).edit()
+            .putString("app-alias:$alias", chosen.activityInfo.packageName).apply()
+        setStatus("نام «$alias» برای ${chosen.loadLabel(packageManager)} ذخیره شد؛ بگویید «باز کن $alias».")
+        updateAppsPanel()
     }
 
     private fun openApp(name: String, multiStep: Boolean = false, onLaunched: ((String) -> Unit)? = null) {
