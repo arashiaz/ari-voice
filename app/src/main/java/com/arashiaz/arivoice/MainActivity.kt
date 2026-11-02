@@ -27,6 +27,7 @@ import android.widget.Button
 import android.widget.Spinner
 import android.view.View
 import android.widget.EditText
+import android.widget.ScrollView
 import android.widget.Toast
 import java.io.File
 import java.net.URI
@@ -47,6 +48,7 @@ class MainActivity : Activity() {
 
     private val handler = Handler(Looper.getMainLooper())
     private var workflowGeneration = 0
+    private val workflowHistory = WorkflowHistory()
     private lateinit var status: TextView
     private lateinit var engineStatus: TextView
     private lateinit var accessibilityState: TextView
@@ -90,6 +92,15 @@ class MainActivity : Activity() {
         askButton = findViewById(R.id.askAi)
         voiceDownload = findViewById(R.id.downloadVoice)
         aiDownload = findViewById(R.id.downloadAi)
+        configureNavigation()
+        findViewById<Button>(R.id.cancelWorkflow).setOnClickListener { cancelActiveWorkflow() }
+        findViewById<Button>(R.id.activityCancel).setOnClickListener { cancelActiveWorkflow() }
+        findViewById<Button>(R.id.clearActivity).setOnClickListener {
+            if (workflowHistory.current?.finished == false) cancelActiveWorkflow()
+            workflowHistory.clear()
+            renderWorkflow()
+        }
+        renderWorkflow()
         askButton.setOnClickListener { askAi(commandInput.text.toString()) }
         findViewById<Button>(R.id.importAi).setOnClickListener {
             if (aiBusy || downloadBusy) return@setOnClickListener
@@ -178,6 +189,58 @@ class MainActivity : Activity() {
     override fun onResume() {
         super.onResume()
         if (::accessibilityState.isInitialized) updateAccessibilityStatus()
+        if (::status.isInitialized) renderWorkflow()
+    }
+
+    private fun configureNavigation() {
+        val sections = listOf(R.id.homePanel, R.id.activityPanel, R.id.appsPanel, R.id.settingsPanel)
+        val navigation = listOf(R.id.navHome, R.id.navActivity, R.id.navApps, R.id.navSettings)
+        val titles = listOf("آری‌ویس", "فعالیت‌ها", "برنامه‌های من", "تنظیمات")
+        navigation.forEachIndexed { index, id ->
+            findViewById<Button>(id).setOnClickListener {
+                sections.forEachIndexed { section, panel ->
+                    findViewById<View>(panel).visibility = if (section == index) View.VISIBLE else View.GONE
+                }
+                findViewById<TextView>(R.id.pageTitle).text = titles[index]
+                findViewById<ScrollView>(R.id.mainScroll).scrollTo(0, 0)
+                renderWorkflow()
+            }
+        }
+    }
+
+    private fun renderWorkflow() {
+        val current = workflowHistory.current
+        val timeline = current?.steps?.joinToString("\n") { step ->
+            val symbol = when (step.stage) {
+                WorkflowHistory.Stage.STOPPED, WorkflowHistory.Stage.CANCELLED -> "!"
+                WorkflowHistory.Stage.WAITING -> "…"
+                else -> "✓"
+            }
+            "$symbol ${step.description}"
+        } ?: "هنوز فرمانی در این نشست اجرا نشده است."
+        findViewById<TextView>(R.id.workflowTimeline).text = timeline
+        val entries = workflowHistory.recent
+        findViewById<TextView>(R.id.activityLog).text = if (entries.isEmpty()) "هنوز فعالیتی نیست."
+            else entries.joinToString("\n\n") { entry ->
+                "${entry.title}\n" + entry.steps.joinToString("\n") { step -> "• ${step.description}" }
+            }
+        val running = current?.finished == false
+        findViewById<Button>(R.id.cancelWorkflow).visibility = if (running) View.VISIBLE else View.GONE
+        findViewById<Button>(R.id.activityCancel).visibility = if (running) View.VISIBLE else View.GONE
+    }
+
+    private fun markWorkflow(stage: WorkflowHistory.Stage, description: String,
+                             done: Boolean = false, generation: Int = workflowGeneration) {
+        if (workflowHistory.advance(generation, stage, description, done)) renderWorkflow()
+    }
+
+    private fun cancelActiveWorkflow() {
+        val current = workflowHistory.current ?: return
+        if (current.finished) return
+        workflowGeneration++ // queued retries and delayed media actions must not resume.
+        workflowHistory.cancel(current.id)
+        setStatus("ادامهٔ فرمان لغو شد. اگر مرحله‌ای قبلاً انجام شده، لغو آن در اپ مقصد خودکار نیست.")
+        renderWorkflow()
     }
 
     private fun updateAccessibilityStatus() {
@@ -492,10 +555,14 @@ class MainActivity : Activity() {
         workflowGeneration++
         val parsed = CommandParser.parse(input)
         if (parsed == null) {
+            workflowHistory.current?.takeIf { !it.finished }?.let { workflowHistory.cancel(it.id); renderWorkflow() }
             if (ChatModel.installed(this)) askAi(input)
             else setStatus("فرمان را نشناختم. برای سؤال آزاد ابتدا مدل هوش مصنوعی را دریافت کنید.")
             return
         }
+        val generation = workflowGeneration
+        workflowHistory.begin(generation, workflowTitle(parsed))
+        renderWorkflow()
         when (parsed) {
             is VoiceCommand.Search -> {
                 val uri = Uri.Builder().scheme("https").authority("www.google.com")
@@ -503,36 +570,58 @@ class MainActivity : Activity() {
                 try {
                     startActivity(Intent(Intent.ACTION_VIEW, uri))
                     feedback("جستجو در مرورگر باز شد", "Search opened in browser")
-                } catch (_: Exception) { setStatus("مرورگری برای جستجو پیدا نشد.") }
+                    markWorkflow(WorkflowHistory.Stage.HANDOFF, "درخواست به مرورگر تحویل شد؛ نتایج تأیید نشده‌اند", true, generation)
+                } catch (_: Exception) {
+                    setStatus("مرورگری برای جستجو پیدا نشد.")
+                    markWorkflow(WorkflowHistory.Stage.STOPPED, "مرورگر پیدا نشد", true, generation)
+                }
             }
-            is VoiceCommand.OpenApp -> openApp(parsed.name)
+            is VoiceCommand.OpenApp -> openApp(parsed.name) { _ ->
+                markWorkflow(WorkflowHistory.Stage.HANDOFF, "برنامه باز شد؛ کار دیگری درخواست نشده بود", true, generation)
+            }
             is VoiceCommand.FindInApp -> {
                 if (parsed.purchaseIntent) {
+                    markWorkflow(WorkflowHistory.Stage.WAITING, "تأیید جستجو لازم است؛ خرید خودکار ممنوع")
                     AlertDialog.Builder(this).setTitle("فقط جستجو؛ بدون خرید")
                         .setMessage("«${parsed.query}» را در «${parsed.app}» جستجو می‌کنم. هیچ کالا، سفارش یا پرداختی را انتخاب یا تأیید نمی‌کنم؛ ادامه با خود شماست.")
                         .setPositiveButton("جستجو") { _, _ -> findInApp(parsed.app, parsed.query, false) }
-                        .setNegativeButton("انصراف", null).show()
+                        .setNegativeButton("انصراف") { _, _ -> cancelActiveWorkflow() }.show()
                 } else findInApp(parsed.app, parsed.query, false)
             }
             is VoiceCommand.ProfileInApp -> {
                 if (parsed.username == null) {
+                    markWorkflow(WorkflowHistory.Stage.WAITING, "نام کاربری از شما خواسته شد")
                     val inputField = EditText(this).apply { hint = "نام کاربری پروفایل"; isSingleLine = true }
                     AlertDialog.Builder(this).setTitle("کدام پروفایل؟")
                         .setView(inputField)
                         .setPositiveButton("جستجوی پروفایل") { _, _ ->
                             val username = inputField.text.toString().trim().removePrefix("@")
-                            if (username.isBlank()) setStatus("نام کاربری وارد نشده است.")
-                            else findInApp(parsed.app, username, true)
+                            if (username.isBlank()) {
+                                setStatus("نام کاربری وارد نشده است.")
+                                markWorkflow(WorkflowHistory.Stage.STOPPED, "نام کاربری وارد نشد", true, generation)
+                            } else findInApp(parsed.app, username, true)
                         }
-                        .setNegativeButton("انصراف", null).show()
+                        .setNegativeButton("انصراف") { _, _ -> cancelActiveWorkflow() }.show()
                 } else findInApp(parsed.app, parsed.username.removePrefix("@"), true)
             }
-            is VoiceCommand.Media -> sendMediaCommand(parsed.action)
-            is VoiceCommand.MediaInApp -> openApp(parsed.app) { _ ->
-                handler.postDelayed({ sendMediaCommand(parsed.action) }, 900)
+            is VoiceCommand.Media -> {
+                val dispatched = sendMediaCommand(parsed.action)
+                markWorkflow(if (dispatched) WorkflowHistory.Stage.HANDOFF else WorkflowHistory.Stage.STOPPED,
+                    if (dispatched) "کلید رسانه ارسال شد؛ پاسخ پلیر تأیید نشده است" else "ارسال کلید رسانه ناموفق بود", true, generation)
+            }
+            is VoiceCommand.MediaInApp -> openApp(parsed.app, multiStep = true) { _ ->
+                markWorkflow(WorkflowHistory.Stage.APP_OPENED, "برنامه باز شد؛ منتظر ارسال کلید رسانه")
+                handler.postDelayed({
+                    if (generation == workflowGeneration && !isDestroyed) {
+                        val dispatched = sendMediaCommand(parsed.action)
+                        markWorkflow(if (dispatched) WorkflowHistory.Stage.HANDOFF else WorkflowHistory.Stage.STOPPED,
+                            if (dispatched) "کلید رسانه ارسال شد؛ پخش واقعی تأیید نشده است" else "ارسال کلید رسانه ناموفق بود", true, generation)
+                    }
+                }, 900)
             }
             is VoiceCommand.Download -> confirmDownload(parsed.url)
             VoiceCommand.DownloadPrompt -> {
+                markWorkflow(WorkflowHistory.Stage.WAITING, "لینک مستقیم HTTPS از شما خواسته شد")
                 val link = EditText(this).apply {
                     hint = "https://example.com/file.pdf"
                     inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_VARIATION_URI
@@ -542,15 +631,17 @@ class MainActivity : Activity() {
                     .setMessage("برای دانلود باید نشانی HTTPS فایل را بدانم؛ عبارت مبهم را به یک فایل دلخواه تبدیل نمی‌کنم.")
                     .setView(link)
                     .setPositiveButton("بررسی لینک") { _, _ -> confirmDownload(link.text.toString().trim()) }
-                    .setNegativeButton("انصراف", null).show()
+                    .setNegativeButton("انصراف") { _, _ -> cancelActiveWorkflow() }.show()
             }
             else -> {
                 if (parsed is VoiceCommand.Tap && SensitiveActionPolicy.isUnsafeClick(parsed.label)) {
                     setStatus("لمس صوتیِ دکمه‌های خرید، پرداخت، تأیید یا ارسال غیرفعال است؛ این کار را خودتان انجام دهید.")
+                    markWorkflow(WorkflowHistory.Stage.STOPPED, "کنترل حساس مجاز نیست", true, generation)
                     return
                 }
                 if (VoiceAccessibilityService.active == null) {
                     setStatus("برای لمس/نوشتن در برنامهٔ دیگر، سرویس دسترس‌پذیری آری‌ویس باید فعال باشد.")
+                    markWorkflow(WorkflowHistory.Stage.STOPPED, "سرویس دسترس‌پذیری فعال نیست", true, generation)
                     AlertDialog.Builder(this).setTitle("کنترل برنامه‌های دیگر فعال نیست")
                         .setMessage("در تنظیمات دسترس‌پذیری، سرویس آری‌ویس را خودتان فعال کنید. سپس از کاشی آری‌ویس در تنظیمات سریع گوشی فرمان دهید تا به برنامهٔ قبلی برگردیم.")
                         .setPositiveButton("بازکردن تنظیمات") { _, _ -> startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
@@ -560,41 +651,64 @@ class MainActivity : Activity() {
                 setStatus("در حال بازگشت به برنامهٔ قبلی…")
                 moveTaskToBack(true)
                 // Switching back from the assistant is asynchronous; retry only while another app is foreground.
-                executeInPreviousApp(parsed, 0)
+                markWorkflow(WorkflowHistory.Stage.WAITING, "در انتظار صفحهٔ برنامهٔ قبلی")
+                executeInPreviousApp(parsed, 0, generation)
             }
         }
     }
 
-    private fun executeInPreviousApp(command: VoiceCommand, attempt: Int) {
+    private fun executeInPreviousApp(command: VoiceCommand, attempt: Int, generation: Int) {
         handler.postDelayed({
+            if (isDestroyed || generation != workflowGeneration) return@postDelayed
             val service = VoiceAccessibilityService.active
             val done = service?.execute(command) == true
-            if (!done && attempt < 4 && service != null) executeInPreviousApp(command, attempt + 1)
-            else if (done) feedback("فرمان انجام شد")
-            else setStatus("کنترل پیدا نشد. صفحهٔ برنامه باید باز باشد؛ برای لمس، نام دکمه باید دقیق و یکتا باشد.")
+            if (!done && attempt < 4 && service != null) executeInPreviousApp(command, attempt + 1, generation)
+            else if (done) {
+                feedback("فرمان به برنامه فرستاده شد؛ نتیجه را بررسی کنید")
+                markWorkflow(WorkflowHistory.Stage.HANDOFF, "عمل روی رابط پذیرفته شد؛ نتیجهٔ نهایی تأیید نشده است", true, generation)
+            } else {
+                setStatus("کنترل پیدا نشد. صفحهٔ برنامه باید باز باشد؛ برای لمس، نام دکمه باید دقیق و یکتا باشد.")
+                markWorkflow(WorkflowHistory.Stage.STOPPED, "کنترل دقیق و یکتا در صفحه پیدا نشد", true, generation)
+            }
         }, if (attempt == 0) 600 else 350)
     }
 
     private fun findInApp(app: String, query: String, profile: Boolean) {
+        val normalized = CommandParser.normalize(app)
+        if (normalized in listOf("مرورگر", "browser")) {
+            // Browsers are better handled by a standard web intent than by inspecting their UI.
+            val uri = Uri.Builder().scheme("https").authority("www.google.com")
+                .appendPath("search").appendQueryParameter("q", query).build()
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW, uri))
+                feedback("جستجو در مرورگر باز شد", "Search opened in browser")
+                markWorkflow(WorkflowHistory.Stage.HANDOFF, "درخواست جستجو به مرورگر تحویل شد", true)
+            } catch (_: Exception) {
+                setStatus("مرورگری برای جستجو پیدا نشد.")
+                markWorkflow(WorkflowHistory.Stage.STOPPED, "مرورگر پیدا نشد", true)
+            }
+            return
+        }
         if (VoiceAccessibilityService.active == null) {
             setStatus("برای جستجو در برنامه‌های دیگر، سرویس دسترس‌پذیری را فعال کنید؛ بازکردن سادهٔ اپ به آن نیاز ندارد.")
+            markWorkflow(WorkflowHistory.Stage.STOPPED, "دسترس‌پذیری فعال نیست؛ اپ باز نشد", true)
             AlertDialog.Builder(this).setTitle("مجوز لازم است")
                 .setMessage("کنترل صفحه فقط پس از فعال‌سازی دستی سرویس آری‌ویس در تنظیمات دسترس‌پذیری ممکن است.")
                 .setPositiveButton("تنظیمات") { _, _ -> startActivity(Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)) }
                 .setNegativeButton("بعداً", null).show()
             return
         }
-        if (query.isBlank()) { setStatus("عبارت جستجو خالی است."); return }
-        val normalized = CommandParser.normalize(app)
-        if (normalized in listOf("مرورگر", "browser")) {
-            // Browsers are better handled by a standard web intent than by inspecting their UI.
-            runCommand("جستجو کن $query")
+        if (query.isBlank()) {
+            setStatus("عبارت جستجو خالی است.")
+            markWorkflow(WorkflowHistory.Stage.STOPPED, "عبارت جستجو خالی است", true)
             return
         }
+        markWorkflow(WorkflowHistory.Stage.WAITING, "در حال یافتن برنامه و کادر جستجو")
         val generation = workflowGeneration
-        openApp(app) { targetPackage ->
+        openApp(app, multiStep = true) { targetPackage ->
             if (generation != workflowGeneration) return@openApp
             setStatus("برنامه باز شد؛ در حال پیدا‌کردن جستجو برای «$query»…")
+            markWorkflow(WorkflowHistory.Stage.APP_OPENED, "برنامه باز شد؛ جستجو هنوز انجام نشده است", generation = generation)
             continueInAppSearch(targetPackage, query, profile, mutableSetOf(), 0, generation)
         }
     }
@@ -606,6 +720,7 @@ class MainActivity : Activity() {
             val service = VoiceAccessibilityService.active
             if (service == null) {
                 showWorkflowResult("کنترل صفحه قطع شد؛ جستجو ادامه نیافت.")
+                markWorkflow(WorkflowHistory.Stage.STOPPED, "سرویس دسترس‌پذیری قطع شد", true, generation)
                 return@postDelayed
             }
             when (val step = service.searchInApp(targetPackage, query, clickedSearchControls)) {
@@ -615,25 +730,39 @@ class MainActivity : Activity() {
                     // Loading and tab transitions can take several seconds on real phones.
                     // Never act on a different foreground package while waiting.
                     if (attempts < 12) continueInAppSearch(targetPackage, query, profile, clickedSearchControls, attempts + 1, generation)
-                    else showWorkflowResult(when (step) {
+                    else {
+                        markWorkflow(WorkflowHistory.Stage.STOPPED, when (step) {
+                            VoiceAccessibilityService.SearchStep.WAIT_FOR_APP -> "اپ هدف در پیش‌زمینه نبود"
+                            VoiceAccessibilityService.SearchStep.WAIT_FOR_FIELD -> "مسیر جستجو باز شد؛ کادر قابل‌دسترسی نبود"
+                            else -> "دکمه یا کادر جستجو پیدا نشد"
+                        }, true, generation)
+                        showWorkflowResult(when (step) {
                         VoiceAccessibilityService.SearchStep.WAIT_FOR_APP ->
                             "صفحهٔ «$targetPackage» در پیش‌زمینه نبود؛ برای ایمنی جستجو ادامه نیافت."
                         VoiceAccessibilityService.SearchStep.WAIT_FOR_FIELD ->
                             "مسیر جستجو باز شد، اما کادر نوشتن در این برنامه قابل‌دسترسی نبود. چیزی نوشته نشد."
                         else -> "دکمه یا کادر جستجوی قابل‌دسترسی پیدا نشد. چیزی نوشته یا انتخاب نشد."
-                    })
+                        })
+                    }
                 }
-                VoiceAccessibilityService.SearchStep.OPENED_SEARCH ->
-                    // A search tab may take time to render: restart the bounded retry window.
+                VoiceAccessibilityService.SearchStep.OPENED_SEARCH -> {
+                    markWorkflow(WorkflowHistory.Stage.SEARCH_OPENED, "کنترل جستجو باز شد؛ منتظر کادر نوشتن", generation = generation)
                     continueInAppSearch(targetPackage, query, profile, clickedSearchControls, 0, generation)
-                VoiceAccessibilityService.SearchStep.ENTERED_QUERY ->
+                }
+                VoiceAccessibilityService.SearchStep.ENTERED_QUERY -> {
+                    markWorkflow(WorkflowHistory.Stage.ENTERED, "عبارت در کادر نوشته شد؛ ارسال تأیید نشده است", true, generation)
                     showWorkflowResult(if (profile) "نام کاربری «$query» در جستجو نوشته شد. پروفایل درست را خودتان انتخاب کنید."
                         else "«$query» نوشته شد؛ اگر نتایج نیامد کلید جستجو را بزنید. نتیجه و هر خریدی را خودتان بررسی کنید.")
-                VoiceAccessibilityService.SearchStep.SUBMITTED ->
+                }
+                VoiceAccessibilityService.SearchStep.SUBMITTED -> {
+                    markWorkflow(WorkflowHistory.Stage.SUBMITTED, "درخواست جستجو ارسال شد؛ نتیجه را خودتان بررسی کنید", true, generation)
                     showWorkflowResult(if (profile) "جستجوی «$query» ارسال شد؛ پروفایل درست را خودتان انتخاب کنید."
                         else "جستجوی «$query» ارسال شد؛ نتیجه و هر خریدی را خودتان بررسی کنید.")
-                VoiceAccessibilityService.SearchStep.AMBIGUOUS ->
+                }
+                VoiceAccessibilityService.SearchStep.AMBIGUOUS -> {
+                    markWorkflow(WorkflowHistory.Stage.STOPPED, "چند کنترل جستجوی مشابه دیده شد", true, generation)
                     showWorkflowResult("چند کادر یا دکمهٔ جستجو دیده شد؛ برای جلوگیری از اشتباه خودتان یکی را انتخاب کنید.")
+                }
             }
         }, if (attempts == 0) 1100 else 500)
     }
@@ -644,7 +773,7 @@ class MainActivity : Activity() {
         Toast.makeText(applicationContext, message, Toast.LENGTH_LONG).show()
     }
 
-    private fun sendMediaCommand(action: MediaAction) {
+    private fun sendMediaCommand(action: MediaAction): Boolean {
         val key = when (action) {
             MediaAction.PLAY -> KeyEvent.KEYCODE_MEDIA_PLAY
             MediaAction.PAUSE -> KeyEvent.KEYCODE_MEDIA_PAUSE
@@ -656,19 +785,25 @@ class MainActivity : Activity() {
             audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, key))
             audio.dispatchMediaKeyEvent(KeyEvent(KeyEvent.ACTION_UP, key))
             setStatus("فرمان به پلیر فعال فرستاده شد. اگر پلیر از کنترل رسانه پشتیبانی نکند ممکن است اجرا نشود.")
-        } catch (_: Exception) { setStatus("کنترل رسانه روی این گوشی یا این پلیر در دسترس نیست.") }
+            return true
+        } catch (_: Exception) {
+            setStatus("کنترل رسانه روی این گوشی یا این پلیر در دسترس نیست.")
+            return false
+        }
     }
 
     private fun confirmDownload(url: String) {
         val parsed = runCatching { URI(url) }.getOrNull()
         if (parsed?.scheme != "https" || parsed.host.isNullOrBlank() || parsed.rawUserInfo != null) {
             setStatus("دانلود فقط با لینک مستقیم HTTPS معتبر پذیرفته می‌شود.")
+            markWorkflow(WorkflowHistory.Stage.STOPPED, "لینک HTTPS معتبر وارد نشد", true)
             return
         }
         val host = parsed.host ?: return
         val rawName = parsed.path?.substringAfterLast('/')?.take(80).orEmpty()
         val safeName = rawName.replace(Regex("[^a-zA-Z0-9._-]"), "_")
             .takeIf { it.isNotBlank() && it != "." && it != ".." } ?: "ari-download"
+        markWorkflow(WorkflowHistory.Stage.WAITING, "در انتظار تأیید دانلود فایل")
         AlertDialog.Builder(this).setTitle("تأیید دانلود")
             .setMessage("فایل از $host در پوشهٔ دانلودها ذخیره می‌شود. از امن‌بودن منبع مطمئن شوید؛ فایل اجرا یا نصب نمی‌شود. ادامه؟")
             .setPositiveButton("دانلود") { _, _ ->
@@ -681,9 +816,13 @@ class MainActivity : Activity() {
                     else request.setDestinationInExternalFilesDir(this, Environment.DIRECTORY_DOWNLOADS, name)
                     (getSystemService(DOWNLOAD_SERVICE) as DownloadManager).enqueue(request)
                     setStatus("دانلود شروع شد؛ نتیجه را در اعلان‌ها یا برنامهٔ فایل‌ها بررسی کنید.")
-                } catch (e: Exception) { setStatus("شروع دانلود ناموفق بود: ${e.message}") }
+                    markWorkflow(WorkflowHistory.Stage.HANDOFF, "درخواست به مدیر دانلود تحویل شد؛ فایل هنوز تأیید نشده است", true)
+                } catch (e: Exception) {
+                    setStatus("شروع دانلود ناموفق بود: ${e.message}")
+                    markWorkflow(WorkflowHistory.Stage.STOPPED, "مدیر دانلود درخواست را نپذیرفت", true)
+                }
             }
-            .setNegativeButton("انصراف", null).show()
+            .setNegativeButton("انصراف") { _, _ -> cancelActiveWorkflow() }.show()
     }
 
     private fun choosePersonalizedName() {
@@ -718,15 +857,23 @@ class MainActivity : Activity() {
             }.setNegativeButton("انصراف", null).show()
     }
 
-    private fun openApp(name: String, onLaunched: ((String) -> Unit)? = null) {
+    private fun openApp(name: String, multiStep: Boolean = false, onLaunched: ((String) -> Unit)? = null) {
         if (name in listOf("تنظیمات", "settings")) {
-            if (onLaunched != null) { setStatus("اجرای فرمان چندگامی در تنظیمات پشتیبانی نمی‌شود."); return }
-            startActivity(Intent(Settings.ACTION_SETTINGS)); feedback("تنظیمات باز شد", "Settings opened"); return
+            if (multiStep) { stopOpeningApp("اجرای فرمان چندگامی در تنظیمات پشتیبانی نمی‌شود."); return }
+            try {
+                startActivity(Intent(Settings.ACTION_SETTINGS))
+                feedback("تنظیمات باز شد", "Settings opened")
+                onLaunched?.invoke("com.android.settings")
+            } catch (_: Exception) { stopOpeningApp("تنظیمات باز نشد.") }
+            return
         }
         if (name in listOf("مرورگر", "browser")) {
-            if (onLaunched != null) { setStatus("برای مرورگر بگویید «جستجو کن ...»."); return }
-            try { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com"))); feedback("مرورگر باز شد", "Browser opened") }
-            catch (_: Exception) { setStatus("مرورگری پیدا نشد.") }
+            if (multiStep) { stopOpeningApp("برای مرورگر بگویید «جستجو کن ...»."); return }
+            try {
+                startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.google.com")))
+                feedback("مرورگر باز شد", "Browser opened")
+                onLaunched?.invoke("browser")
+            } catch (_: Exception) { stopOpeningApp("مرورگری پیدا نشد.") }
             return
         }
         val query = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER)
@@ -762,10 +909,11 @@ class MainActivity : Activity() {
         }
         val choices = if (ranked.isNotEmpty()) ranked.map { it.first } else apps
         if (choices.isEmpty()) {
-            setStatus("فهرست برنامه‌های قابل اجرا در دسترس نیست. دسترسی نمایش برنامه‌ها را در تنظیمات گوشی بررسی کنید.")
+            stopOpeningApp("فهرست برنامه‌های قابل اجرا در دسترس نیست. دسترسی نمایش برنامه‌ها را در تنظیمات گوشی بررسی کنید.")
             return
         }
         setStatus("نام «$name» دقیقاً پیدا نشد؛ برنامهٔ درست را از فهرست انتخاب کنید تا نام صوتی آن ذخیره شود.")
+        markWorkflow(WorkflowHistory.Stage.WAITING, "انتخاب برنامهٔ درست با شماست")
         showAppPicker(name, choices, onLaunched)
     }
 
@@ -778,7 +926,7 @@ class MainActivity : Activity() {
             })
             feedback("$label باز شد", "$label opened")
             onLaunched?.invoke(app.activityInfo.packageName)
-        } catch (_: Exception) { setStatus("بازکردن «$label» امکان‌پذیر نیست.") }
+        } catch (_: Exception) { stopOpeningApp("بازکردن «$label» امکان‌پذیر نیست.") }
     }
 
     private fun showAppPicker(voiceName: String, apps: List<ResolveInfo>, onLaunched: ((String) -> Unit)? = null) {
@@ -786,14 +934,24 @@ class MainActivity : Activity() {
             it.loadLabel(packageManager).toString()
         })
         val labels = sorted.map { "${it.loadLabel(packageManager)}  (${it.activityInfo.packageName})" }.toTypedArray()
+        val generation = workflowGeneration
         AlertDialog.Builder(this).setTitle("انتخاب برنامه برای «$voiceName»")
             .setItems(labels) { _, index ->
+                if (generation != workflowGeneration) return@setItems
                 val app = sorted[index]
-                getPreferences(MODE_PRIVATE).edit()
-                    .putString("app-alias:${CommandParser.normalize(voiceName)}", app.activityInfo.packageName).apply()
-                launchApp(app, onLaunched)
+                launchApp(app) { chosenPackage ->
+                    getPreferences(MODE_PRIVATE).edit()
+                        .putString("app-alias:${CommandParser.normalize(voiceName)}", chosenPackage).apply()
+                    onLaunched?.invoke(chosenPackage)
+                }
             }
-            .setNegativeButton("انصراف", null).show()
+            .setNegativeButton("انصراف") { _, _ -> cancelActiveWorkflow() }
+            .setOnCancelListener { cancelActiveWorkflow() }.show()
+    }
+
+    private fun stopOpeningApp(message: String) {
+        setStatus(message)
+        markWorkflow(WorkflowHistory.Stage.STOPPED, "برنامه باز نشد یا این مسیر پشتیبانی نمی‌شود", true)
     }
 
     private fun feedback(message: String, englishMessage: String = "Done") {

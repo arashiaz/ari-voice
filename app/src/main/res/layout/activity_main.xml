@@ -1,92 +1,182 @@
-<ScrollView xmlns:android="http://schemas.android.com/apk/res/android"
-    android:layout_width="match_parent" android:layout_height="match_parent"
-    android:fillViewport="true" android:layoutDirection="rtl">
-    <LinearLayout android:orientation="vertical" android:padding="22dp"
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:orientation="vertical" android:layout_width="match_parent"
+    android:layout_height="match_parent" android:layoutDirection="rtl"
+    android:background="@color/page_bg">
+
+    <LinearLayout android:orientation="vertical" android:paddingStart="20dp" android:paddingEnd="20dp"
+        android:paddingTop="16dp" android:paddingBottom="10dp"
         android:layout_width="match_parent" android:layout_height="wrap_content">
+        <TextView android:id="@+id/pageTitle" android:layout_width="match_parent"
+            android:layout_height="wrap_content" android:text="آری‌ویس" android:textSize="28sp"
+            android:textStyle="bold" android:textColor="@color/text_primary" />
         <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:text="آری‌ویس" android:textSize="32sp" android:textStyle="bold" android:textColor="#18264C" />
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="4dp" android:text="دستیار فرمان‌های صوتی، روی گوشی شما"
-            android:textSize="15sp" android:textColor="#56617B" />
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="24dp" android:padding="20dp" android:orientation="vertical"
-            android:background="@drawable/card">
-            <TextView android:id="@+id/engineStatus" android:layout_width="match_parent"
-                android:layout_height="wrap_content" android:textColor="#3756B8"
-                android:textStyle="bold" android:textSize="14sp" />
-            <Button android:id="@+id/downloadVoice" android:layout_width="match_parent"
-                android:layout_height="wrap_content" android:layout_marginTop="10dp"
-                android:text="دریافت مدل گفتار زبان انتخابی (یک‌بار)" android:textAllCaps="false" />
-            <TextView android:id="@+id/status" android:layout_width="match_parent"
-                android:layout_height="wrap_content" android:layout_marginTop="12dp"
-                android:text="آماده‌ام. یک فرمان بگویید یا بنویسید."
-                android:textColor="#18264C" android:textSize="17sp" />
-            <EditText android:id="@+id/command" android:layout_width="match_parent"
-                android:layout_height="wrap_content" android:layout_marginTop="18dp"
-                android:hint="مثلاً: جستجو کن آب و هوا" android:inputType="text"
-                android:singleLine="true" android:textSize="16sp" />
-            <Button android:id="@+id/listen" android:layout_width="match_parent"
-                android:layout_height="52dp" android:layout_marginTop="18dp"
-                android:background="@drawable/primary_button" android:text="🎙  شروع شنیدن"
-                android:textColor="#FFFFFF" android:textSize="17sp" android:textAllCaps="false" />
-            <Button android:id="@+id/run" android:layout_width="match_parent"
-                android:layout_height="wrap_content" android:layout_marginTop="8dp"
-                android:text="اجرای فرمان نوشته‌شده" android:textAllCaps="false" />
-            <TextView android:id="@+id/accessibilityState" android:layout_width="match_parent"
-                android:layout_height="wrap_content" android:layout_marginTop="14dp"
-                android:textColor="#56617B" android:textSize="13sp" />
-            <Button android:id="@+id/accessibility" android:layout_width="match_parent"
-                android:layout_height="wrap_content" android:layout_marginTop="4dp"
-                android:text="مجوز کنترل داخل برنامه‌ها (اختیاری)" android:textAllCaps="false" />
-            <Button android:id="@+id/customize" android:layout_width="match_parent"
-                android:layout_height="wrap_content" android:layout_marginTop="4dp"
-                android:text="نام دلخواه برای برنامه‌های نصب‌شده" android:textAllCaps="false" />
-        </LinearLayout>
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="26dp" android:text="زبان فرمان صوتی" android:textSize="20sp"
-            android:textStyle="bold" android:textColor="#18264C" />
-        <Spinner android:id="@+id/language" android:layout_width="match_parent"
-            android:layout_height="52dp" android:entries="@array/voice_languages"
-            android:contentDescription="زبان تشخیص گفتار" />
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="8dp" android:text="برای هر زبان مدل آفلاین جداگانه وارد کنید؛ زبان انتخابی روی تشخیص گفتار و پاسخ صوتی اثر دارد."
-            android:textColor="#56617B" android:textSize="14sp" />
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="26dp" android:text="راه‌اندازی" android:textSize="20sp"
-            android:textStyle="bold" android:textColor="#18264C" />
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="8dp" android:text="اگر تشخیص گفتار آفلاین گوشی موجود نباشد، فایل ZIP مدل Vosk زبان انتخابی را یک‌بار وارد کنید. مدل فقط در حافظهٔ همین برنامه نگه داشته می‌شود."
-            android:textColor="#56617B" android:textSize="14sp" />
-        <Button android:id="@+id/importModel" android:layout_width="match_parent"
-            android:layout_height="wrap_content" android:layout_marginTop="8dp"
-            android:text="واردکردن مدل آفلاین (ZIP)" android:textAllCaps="false" />
-        <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="22dp" android:padding="18dp" android:orientation="vertical"
-            android:background="@drawable/card">
-            <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-                android:text="گفت‌وگوی هوش مصنوعی آفلاین" android:textSize="19sp"
-                android:textStyle="bold" android:textColor="#18264C" />
-            <TextView android:id="@+id/aiStatus" android:layout_width="match_parent"
-                android:layout_height="wrap_content" android:layout_marginTop="10dp"
-                android:text="مدل کوچک ۰٫۵ میلیاردی، فقط روی گوشی اجرا می‌شود. برای استفاده آن را یک‌بار دریافت یا وارد کنید."
-                android:textColor="#56617B" android:textSize="14sp" />
-            <Button android:id="@+id/downloadAi" android:layout_width="match_parent"
-                android:layout_height="wrap_content" android:layout_marginTop="8dp"
-                android:text="دریافت مدل هوش مصنوعی (~۴۹۱ مگابایت)" android:textAllCaps="false" />
-            <Button android:id="@+id/importAi" android:layout_width="match_parent"
-                android:layout_height="wrap_content" android:text="واردکردن مدل GGUF از فایل" android:textAllCaps="false" />
-            <Button android:id="@+id/askAi" android:layout_width="match_parent"
-                android:layout_height="wrap_content" android:text="پرسیدن از هوش مصنوعی (متن بالا)" android:textAllCaps="false" />
-            <TextView android:id="@+id/aiResponse" android:layout_width="match_parent"
-                android:layout_height="wrap_content" android:layout_marginTop="12dp"
-                android:textIsSelectable="true" android:textColor="#18264C" android:textSize="16sp" />
-        </LinearLayout>
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="20dp" android:padding="18dp" android:background="@drawable/card"
-            android:text="نمونه فرمان‌ها\n\n«باز کن تلگرام»  •  «جستجو کن هوای تهران»\n«روی تنظیمات بزن»  •  «بنویس سلام»\n«اسکرول پایین»  •  «برو عقب»\n«open Telegram»  •  «search for weather»\n«برو فروشگاه من و نوشابه بخر» (فقط جستجو)\n«برو اینستاگرام و پروفایل arash رو باز کن»\n«موزیک پخش کن»  •  «دانلود کن https://…»\n\nبرای فرمان در برنامهٔ دیگر، کاشی آری‌ویس را به تنظیمات سریع گوشی اضافه کنید. پس از شنیدن، به همان برنامه برمی‌گردیم. پیام‌ها هرگز خودکار ارسال نمی‌شوند."
-            android:textSize="14sp" android:lineSpacingExtra="5dp" android:textColor="#34405F" />
-        <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="18dp" android:text="بدون حساب، تبلیغ یا سرور پردازش صوت. فقط دریافت اولیهٔ مدل‌ها و جستجوی وب اینترنت لازم دارند؛ گفتار و پاسخ‌ها از گوشی خارج نمی‌شوند."
-            android:textSize="13sp" android:textColor="#68738B" />
+            android:text="دستیار صوتیِ محلی؛ فرمان‌ها زیر نظر شما"
+            android:textSize="14sp" android:textColor="@color/text_secondary" />
     </LinearLayout>
-</ScrollView>
+
+    <ScrollView android:id="@+id/mainScroll" android:layout_width="match_parent"
+        android:layout_height="0dp" android:layout_weight="1" android:fillViewport="true">
+        <LinearLayout android:orientation="vertical" android:paddingStart="20dp"
+            android:paddingEnd="20dp" android:paddingBottom="24dp"
+            android:layout_width="match_parent" android:layout_height="wrap_content">
+
+            <LinearLayout android:id="@+id/homePanel" android:orientation="vertical"
+                android:layout_width="match_parent" android:layout_height="wrap_content">
+                <LinearLayout android:orientation="vertical" android:padding="20dp"
+                    android:layout_marginTop="10dp" android:background="@drawable/card"
+                    android:layout_width="match_parent" android:layout_height="wrap_content">
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:text="چه کاری انجام بدهم؟" android:textSize="22sp"
+                        android:textStyle="bold" android:textColor="@color/text_primary" />
+                    <TextView android:id="@+id/engineStatus" android:layout_width="match_parent"
+                        android:layout_height="wrap_content" android:layout_marginTop="12dp"
+                        android:textColor="@color/brand" android:textSize="14sp" />
+                    <Button android:id="@+id/listen" android:layout_width="match_parent"
+                        android:layout_height="64dp" android:layout_marginTop="20dp"
+                        android:background="@drawable/primary_button" android:text="🎙  شروع شنیدن"
+                        android:textColor="@color/brand_on" android:textSize="19sp"
+                        android:contentDescription="شروع یا توقف شنیدن فرمان صوتی"
+                        android:textAllCaps="false" />
+                    <TextView android:id="@+id/status" android:layout_width="match_parent"
+                        android:layout_height="wrap_content" android:layout_marginTop="18dp"
+                        android:text="آماده‌ام. یک فرمان بگویید یا بنویسید."
+                        android:textColor="@color/text_primary" android:textSize="16sp" />
+                    <EditText android:id="@+id/command" android:layout_width="match_parent"
+                        android:layout_height="wrap_content" android:layout_marginTop="16dp"
+                        android:hint="مثلاً: برو اینستاگرام جستجو کن اردلان"
+                        android:contentDescription="متن فرمان یا سؤال" android:inputType="text"
+                        android:singleLine="true" android:textSize="16sp" />
+                    <Button android:id="@+id/run" android:layout_width="match_parent"
+                        android:layout_height="52dp" android:layout_marginTop="8dp"
+                        android:text="اجرای فرمان نوشته‌شده" android:textAllCaps="false" />
+                </LinearLayout>
+                <LinearLayout android:orientation="vertical" android:padding="18dp"
+                    android:layout_marginTop="16dp" android:background="@drawable/card"
+                    android:layout_width="match_parent" android:layout_height="wrap_content">
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:text="مراحل آخرین فرمان" android:textSize="18sp"
+                        android:textStyle="bold" android:textColor="@color/text_primary" />
+                    <TextView android:id="@+id/workflowTimeline" android:layout_width="match_parent"
+                        android:layout_height="wrap_content" android:layout_marginTop="10dp"
+                        android:text="هنوز فرمانی در این نشست اجرا نشده است."
+                        android:textColor="@color/text_secondary" android:textSize="15sp"
+                        android:lineSpacingExtra="6dp" android:textIsSelectable="true" />
+                    <Button android:id="@+id/cancelWorkflow" android:layout_width="match_parent"
+                        android:layout_height="48dp" android:layout_marginTop="8dp"
+                        android:text="لغو ادامهٔ فرمان" android:textAllCaps="false"
+                        android:visibility="gone" />
+                </LinearLayout>
+                <TextView android:id="@+id/accessibilityState" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:layout_marginTop="18dp"
+                    android:textColor="@color/text_secondary" android:textSize="14sp" />
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp" android:padding="18dp" android:background="@drawable/card"
+                    android:text="نمونه فرمان‌ها\n«باز کن تلگرام»  •  «جستجو کن هوای تهران»\n«برو اینستاگرام جستجو کن اردلان»\n«موزیک پخش کن»  •  «دانلود کن https://…»\n\nبرای فرمان داخل اپ دیگر، سرویس دسترس‌پذیری اختیاری را در تنظیمات فعال کنید. خرید یا پرداخت خودکار انجام نمی‌شود."
+                    android:textSize="14sp" android:lineSpacingExtra="5dp"
+                    android:textColor="@color/text_secondary" />
+            </LinearLayout>
+
+            <LinearLayout android:id="@+id/activityPanel" android:orientation="vertical"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:visibility="gone">
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp" android:text="فعالیت‌های همین نشست"
+                    android:textSize="21sp" android:textStyle="bold" android:textColor="@color/text_primary" />
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="6dp" android:text="فقط عنوان‌های کلی و مراحل نگه داشته می‌شوند؛ متن گفتار، نام کاربری و صفحهٔ اپ ذخیره نمی‌شود. با بستن برنامه این فهرست از بین می‌رود."
+                    android:textSize="14sp" android:textColor="@color/text_secondary" />
+                <TextView android:id="@+id/activityLog" android:layout_width="match_parent"
+                    android:layout_height="wrap_content" android:layout_marginTop="16dp"
+                    android:background="@drawable/card" android:padding="18dp" android:text="هنوز فعالیتی نیست."
+                    android:textColor="@color/text_primary" android:textSize="15sp"
+                    android:lineSpacingExtra="6dp" android:textIsSelectable="true" />
+                <Button android:id="@+id/activityCancel" android:layout_width="match_parent"
+                    android:layout_height="48dp" android:layout_marginTop="12dp"
+                    android:text="لغو فرمان در حال اجرا" android:textAllCaps="false" android:visibility="gone" />
+                <Button android:id="@+id/clearActivity" android:layout_width="match_parent"
+                    android:layout_height="48dp" android:layout_marginTop="8dp"
+                    android:text="پاک‌کردن فهرست این نشست" android:textAllCaps="false" />
+            </LinearLayout>
+
+            <LinearLayout android:id="@+id/appsPanel" android:orientation="vertical"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:visibility="gone">
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp" android:text="برنامه‌های گوشی من"
+                    android:textSize="21sp" android:textStyle="bold" android:textColor="@color/text_primary" />
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="8dp" android:text="اپ‌های نصب‌شده از خود گوشی خوانده می‌شوند. فروشگاه یا پخش‌کنندهٔ ثابتی به شما تحمیل نمی‌شود. برای اپ‌های هم‌نام، خودتان انتخاب کنید."
+                    android:textSize="15sp" android:textColor="@color/text_secondary" />
+                <Button android:id="@+id/customize" android:layout_width="match_parent"
+                    android:layout_height="52dp" android:layout_marginTop="16dp"
+                    android:text="انتخاب اپ و تنظیم نام صوتی دلخواه" android:textAllCaps="false" />
+            </LinearLayout>
+
+            <LinearLayout android:id="@+id/settingsPanel" android:orientation="vertical"
+                android:layout_width="match_parent" android:layout_height="wrap_content"
+                android:visibility="gone">
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp" android:text="زبان و گفتار آفلاین"
+                    android:textSize="21sp" android:textStyle="bold" android:textColor="@color/text_primary" />
+                <Spinner android:id="@+id/language" android:layout_width="match_parent"
+                    android:layout_height="52dp" android:entries="@array/voice_languages"
+                    android:contentDescription="زبان تشخیص گفتار" />
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:text="برای هر زبان مدل آفلاین جداگانه لازم است. گفتار و تفسیر فرمان روی گوشی انجام می‌شود."
+                    android:textColor="@color/text_secondary" android:textSize="14sp" />
+                <Button android:id="@+id/downloadVoice" android:layout_width="match_parent"
+                    android:layout_height="52dp" android:layout_marginTop="12dp"
+                    android:text="دریافت مدل گفتار زبان انتخابی (یک‌بار)" android:textAllCaps="false" />
+                <Button android:id="@+id/importModel" android:layout_width="match_parent"
+                    android:layout_height="52dp" android:layout_marginTop="6dp"
+                    android:text="واردکردن مدل آفلاین (ZIP)" android:textAllCaps="false" />
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="22dp" android:text="مجوز کنترل داخل برنامه‌ها"
+                    android:textSize="20sp" android:textStyle="bold" android:textColor="@color/text_primary" />
+                <Button android:id="@+id/accessibility" android:layout_width="match_parent"
+                    android:layout_height="52dp" android:layout_marginTop="8dp"
+                    android:text="تنظیمات دسترس‌پذیری (اختیاری)" android:textAllCaps="false" />
+                <LinearLayout android:orientation="vertical" android:padding="18dp"
+                    android:layout_marginTop="20dp" android:background="@drawable/card"
+                    android:layout_width="match_parent" android:layout_height="wrap_content">
+                    <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                        android:text="پرسش و پاسخ آفلاین (اختیاری)" android:textSize="19sp"
+                        android:textStyle="bold" android:textColor="@color/text_primary" />
+                    <TextView android:id="@+id/aiStatus" android:layout_width="match_parent"
+                        android:layout_height="wrap_content" android:layout_marginTop="10dp"
+                        android:text="مدل کوچک محلی؛ جدا از موتور فرمان‌ها."
+                        android:textColor="@color/text_secondary" android:textSize="14sp" />
+                    <Button android:id="@+id/downloadAi" android:layout_width="match_parent"
+                        android:layout_height="52dp" android:layout_marginTop="8dp"
+                        android:text="دریافت مدل هوش مصنوعی (~۴۹۱ مگابایت)" android:textAllCaps="false" />
+                    <Button android:id="@+id/importAi" android:layout_width="match_parent"
+                        android:layout_height="52dp" android:text="واردکردن مدل GGUF از فایل"
+                        android:textAllCaps="false" />
+                    <Button android:id="@+id/askAi" android:layout_width="match_parent"
+                        android:layout_height="52dp" android:text="پرسیدن از هوش مصنوعی (متن صفحهٔ خانه)"
+                        android:textAllCaps="false" />
+                    <TextView android:id="@+id/aiResponse" android:layout_width="match_parent"
+                        android:layout_height="wrap_content" android:layout_marginTop="12dp"
+                        android:textIsSelectable="true" android:textColor="@color/text_primary"
+                        android:textSize="16sp" />
+                </LinearLayout>
+                <TextView android:layout_width="match_parent" android:layout_height="wrap_content"
+                    android:layout_marginTop="18dp" android:text="هیچ حسابی لازم نیست. مدل‌ها در APK نیستند و فقط با تأیید شما دریافت می‌شوند. جستجوی وب و اپ‌های آنلاین به اینترنت گوشی نیاز دارند."
+                    android:textSize="13sp" android:textColor="@color/text_secondary" />
+            </LinearLayout>
+        </LinearLayout>
+    </ScrollView>
+
+    <LinearLayout android:layout_width="match_parent" android:layout_height="wrap_content"
+        android:orientation="horizontal" android:padding="4dp"
+        android:background="@color/card_bg">
+        <Button android:id="@+id/navHome" android:layout_width="0dp" android:layout_weight="1"
+            android:layout_height="52dp" android:text="خانه" android:textAllCaps="false" />
+        <Button android:id="@+id/navActivity" android:layout_width="0dp" android:layout_weight="1"
+            android:layout_height="52dp" android:text="فعالیت‌ها" android:textAllCaps="false" />
+        <Button android:id="@+id/navApps" android:layout_width="0dp" android:layout_weight="1"
+            android:layout_height="52dp" android:text="برنامه‌ها" android:textAllCaps="false" />
+        <Button android:id="@+id/navSettings" android:layout_width="0dp" android:layout_weight="1"
+            android:layout_height="52dp" android:text="تنظیمات" android:textAllCaps="false" />
+    </LinearLayout>
+</LinearLayout>

@@ -1,0 +1,10 @@
+<resources>
+    <color name="page_bg">#F7F8FC</color>
+    <color name="card_bg">#FFFFFF</color>
+    <color name="card_border">#DFE5F0</color>
+    <color name="text_primary">#18264C</color>
+    <color name="text_secondary">#52617A</color>
+    <color name="brand">#3756B8</color>
+    <color name="brand_on">#FFFFFF</color>
+    <color name="soft_brand">#EDF2FF</color>
+</resources>
