@@ -138,5 +138,12 @@ root = wait_for(
 )
 if any("انتخاب برنامه برای" in node.get("text", "") for node in root.iter("node")):
     raise AssertionError("Compound search was mistaken for an app name")
-print("PASS: APK installs/opens; Settings opens; compound search reaches permission check")
+adb("shell", "input", "keyevent", "KEYCODE_BACK")
+root = wait_for(lambda ui: node_by_id(ui, "navActivity") is not None, "assistant after permission dialog")
+click(root, "navActivity")
+root = wait_for(lambda ui: node_by_id(ui, "activityLog") is not None, "action history")
+record = node_by_id(root, "activityLog").get("text", "")
+if "دسترس‌پذیری فعال نیست" not in record or "ardalan" in record.casefold():
+    raise AssertionError(f"History did not safely record the stop stage: {record[:240]}")
+print("PASS: APK installs/opens; four sections render; Settings opens; compound search stops for permission")
 print("NOT TESTED: offline voice recognition or third-party in-app search on a real phone")

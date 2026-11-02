@@ -598,7 +598,7 @@ class MainActivity : Activity() {
             is VoiceCommand.OpenApp -> openApp(parsed.name) { targetPackage ->
                 if (generation == workflowGeneration && targetPackage !in listOf("browser", "com.android.settings"))
                     recentApp = RecentApp(parsed.name, SystemClock.elapsedRealtime())
-                markWorkflow(WorkflowHistory.Stage.HANDOFF, "برنامه باز شد؛ کار دیگری درخواست نشده بود", true, generation)
+                markWorkflow(WorkflowHistory.Stage.HANDOFF, "درخواست بازکردن اپ به اندروید تحویل شد", true, generation)
             }
             is VoiceCommand.FindInApp -> {
                 if (parsed.purchaseIntent) {
@@ -606,7 +606,8 @@ class MainActivity : Activity() {
                     AlertDialog.Builder(this).setTitle("فقط جستجو؛ بدون خرید")
                         .setMessage("«${parsed.query}» را در «${parsed.app}» جستجو می‌کنم. هیچ کالا، سفارش یا پرداختی را انتخاب یا تأیید نمی‌کنم؛ ادامه با خود شماست.")
                         .setPositiveButton("جستجو") { _, _ -> findInApp(parsed.app, parsed.query, false) }
-                        .setNegativeButton("انصراف") { _, _ -> cancelActiveWorkflow() }.show()
+                        .setNegativeButton("انصراف") { _, _ -> cancelActiveWorkflow() }
+                        .setOnCancelListener { cancelActiveWorkflow() }.show()
                 } else findInApp(parsed.app, parsed.query, false)
             }
             is VoiceCommand.ProfileInApp -> {
@@ -622,7 +623,8 @@ class MainActivity : Activity() {
                                 markWorkflow(WorkflowHistory.Stage.STOPPED, "نام کاربری وارد نشد", true, generation)
                             } else findInApp(parsed.app, username, true)
                         }
-                        .setNegativeButton("انصراف") { _, _ -> cancelActiveWorkflow() }.show()
+                        .setNegativeButton("انصراف") { _, _ -> cancelActiveWorkflow() }
+                        .setOnCancelListener { cancelActiveWorkflow() }.show()
                 } else findInApp(parsed.app, parsed.username.removePrefix("@"), true)
             }
             is VoiceCommand.Media -> {
@@ -652,7 +654,8 @@ class MainActivity : Activity() {
                     .setMessage("برای دانلود باید نشانی HTTPS فایل را بدانم؛ عبارت مبهم را به یک فایل دلخواه تبدیل نمی‌کنم.")
                     .setView(link)
                     .setPositiveButton("بررسی لینک") { _, _ -> confirmDownload(link.text.toString().trim()) }
-                    .setNegativeButton("انصراف") { _, _ -> cancelActiveWorkflow() }.show()
+                    .setNegativeButton("انصراف") { _, _ -> cancelActiveWorkflow() }
+                    .setOnCancelListener { cancelActiveWorkflow() }.show()
             }
             else -> {
                 if (parsed is VoiceCommand.Tap && SensitiveActionPolicy.isUnsafeClick(parsed.label)) {
@@ -844,7 +847,8 @@ class MainActivity : Activity() {
                     markWorkflow(WorkflowHistory.Stage.STOPPED, "مدیر دانلود درخواست را نپذیرفت", true)
                 }
             }
-            .setNegativeButton("انصراف") { _, _ -> cancelActiveWorkflow() }.show()
+            .setNegativeButton("انصراف") { _, _ -> cancelActiveWorkflow() }
+            .setOnCancelListener { cancelActiveWorkflow() }.show()
     }
 
     private fun launcherApps(): List<ResolveInfo> = packageManager.queryIntentActivities(

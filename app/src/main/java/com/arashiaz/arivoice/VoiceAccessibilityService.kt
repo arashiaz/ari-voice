@@ -92,7 +92,9 @@ class VoiceAccessibilityService : AccessibilityService() {
             while (clickable != null && !clickable.isClickable) clickable = clickable.parent
             val target = clickable
             if (target != null && target.isVisibleToUser && !target.isPassword &&
-                buttons.none { it == target }) buttons.add(target)
+                listOfNotNull(target.text, target.contentDescription).none {
+                    SensitiveActionPolicy.isUnsafeClick(it.toString())
+                } && buttons.none { it == target }) buttons.add(target)
         }
         for (index in 0 until node.childCount) node.getChild(index)?.let {
             collectSearchButtons(it, targetPackage, buttons)
