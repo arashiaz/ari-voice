@@ -33,6 +33,10 @@ class WorkflowParserTest {
         assertEquals(expected, CommandParser.parse("اینستاگرام جستجو ardalan"))
         assertEquals(expected, CommandParser.parse("باز کن اینستاگرام جستجو ardalan"))
         assertEquals(expected, CommandParser.parse("برو اینستاگرام جستجو ardalan"))
+        assertEquals(VoiceCommand.FindInApp("اینستاگرام", "اردلان"),
+            CommandParser.parse("برو اینستاگرام جستجو کن اردلان"))
+        assertEquals(VoiceCommand.FindInApp("تلگرام", "اردلان"),
+            CommandParser.parse("برو تلگرام جستجو کن اردلان"))
         assertEquals(expected, CommandParser.parse("برو تو اینستاگرام جستجو ardalan"))
         assertEquals(expected, CommandParser.parse("برو اینستاگرام و جستجو ardalan"))
         assertEquals(VoiceCommand.ProfileInApp("اینستاگرام", "ardalan"),

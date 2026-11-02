@@ -1,6 +1,7 @@
 package com.arashiaz.arivoice
 
 import android.accessibilityservice.AccessibilityService
+import android.graphics.Rect
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.os.Bundle
@@ -23,8 +24,9 @@ class VoiceAccessibilityService : AccessibilityService() {
 
     enum class SearchStep { WAIT_FOR_APP, OPENED_SEARCH, WAIT_FOR_FIELD, ENTERED_QUERY, SUBMITTED, AMBIGUOUS, NO_SEARCH_UI }
 
-    /** Search in an explicitly selected app. Never click a product, purchase, checkout or payment control. */
-    fun searchInApp(targetPackage: String, query: String, openedSearch: Boolean): SearchStep {
+    /** Search in an explicitly selected app. Never click a product, purchase, checkout or payment control.
+     * The mutable set belongs to ONE user command: at most two distinct, named search controls can be clicked. */
+    fun searchInApp(targetPackage: String, query: String, clickedSearchControls: MutableSet<String>): SearchStep {
         val root = rootInActiveWindow ?: return SearchStep.WAIT_FOR_APP
         if (root.packageName?.toString() != targetPackage) return SearchStep.WAIT_FOR_APP
         if (query.isBlank() || query.length > 200) return SearchStep.NO_SEARCH_UI
@@ -34,7 +36,7 @@ class VoiceAccessibilityService : AccessibilityService() {
         val field = when {
             marked.size == 1 -> marked.single()
             marked.size > 1 -> return SearchStep.AMBIGUOUS
-            openedSearch && fields.size == 1 && fields.single().isFocused -> fields.single()
+            clickedSearchControls.isNotEmpty() && fields.size == 1 && fields.single().isFocused -> fields.single()
             else -> null
         }
         if (field != null) {
@@ -42,21 +44,31 @@ class VoiceAccessibilityService : AccessibilityService() {
                 putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, query)
             })
             if (!success) return SearchStep.NO_SEARCH_UI
-            // Only submit a field explicitly marked as search or revealed by a Search button.
+            // Only submit a field explicitly marked as search or revealed by a Search control.
             if (Build.VERSION.SDK_INT >= 30 &&
                 field.performAction(AccessibilityNodeInfo.AccessibilityAction.ACTION_IME_ENTER.id)) {
                 return SearchStep.SUBMITTED
             }
             return SearchStep.ENTERED_QUERY
         }
-        if (openedSearch) return SearchStep.WAIT_FOR_FIELD
+        // Some apps (notably Instagram) have an Explore tab followed by a separate Search bar.
+        // Do not click any control without a unique, explicit search/explore label.
+        if (clickedSearchControls.size >= 2) return SearchStep.WAIT_FOR_FIELD
         val buttons = mutableListOf<AccessibilityNodeInfo>()
-        collectSearchButtons(root, buttons)
-        if (buttons.size > 1) return SearchStep.AMBIGUOUS
-        if (buttons.size == 1 && buttons.single().performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+        collectSearchButtons(root, targetPackage, buttons)
+        val fresh = buttons.filter { searchControlKey(it) !in clickedSearchControls }
+        if (fresh.size > 1) return SearchStep.AMBIGUOUS
+        if (fresh.size == 1 && fresh.single().performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
+            clickedSearchControls.add(searchControlKey(fresh.single()))
             return SearchStep.OPENED_SEARCH
         }
-        return SearchStep.NO_SEARCH_UI
+        return if (clickedSearchControls.isNotEmpty()) SearchStep.WAIT_FOR_FIELD else SearchStep.NO_SEARCH_UI
+    }
+
+    private fun searchControlKey(node: AccessibilityNodeInfo): String {
+        val bounds = Rect()
+        node.getBoundsInScreen(bounds)
+        return "${node.viewIdResourceName.orEmpty()}:${bounds.flattenToString()}"
     }
 
     private fun collectEditable(node: AccessibilityNodeInfo, fields: MutableList<AccessibilityNodeInfo>) {
@@ -71,17 +83,20 @@ class VoiceAccessibilityService : AccessibilityService() {
         hint.contains("search") || hint.contains("جستجو") || hint.contains("جست و جو") || hint.contains("سرچ")
     } }
 
-    private fun collectSearchButtons(node: AccessibilityNodeInfo, buttons: MutableList<AccessibilityNodeInfo>) {
+    private fun collectSearchButtons(node: AccessibilityNodeInfo, targetPackage: String,
+                                     buttons: MutableList<AccessibilityNodeInfo>) {
         if (!node.isVisibleToUser) return
-        val names = listOfNotNull(node.text, node.contentDescription).map { CommandParser.normalize(it.toString()) }
-        if (names.any { it in setOf("search", "جستجو", "جست و جو", "سرچ", "search products", "جستجوی محصولات") }) {
+        val names = listOfNotNull(node.text, node.contentDescription)
+        if (names.any { SearchUiLabels.isSearchEntry(it.toString(), targetPackage) }) {
             var clickable: AccessibilityNodeInfo? = node
             while (clickable != null && !clickable.isClickable) clickable = clickable.parent
             val target = clickable
             if (target != null && target.isVisibleToUser && !target.isPassword &&
                 buttons.none { it == target }) buttons.add(target)
         }
-        for (index in 0 until node.childCount) node.getChild(index)?.let { collectSearchButtons(it, buttons) }
+        for (index in 0 until node.childCount) node.getChild(index)?.let {
+            collectSearchButtons(it, targetPackage, buttons)
+        }
     }
 
     fun execute(command: VoiceCommand): Boolean = when (command) {

@@ -11,8 +11,8 @@ android {
         applicationId = "com.arashiaz.arivoice"
         minSdk = 26
         targetSdk = 34
-        versionCode = 3
-        versionName = "0.3.0"
+        versionCode = 4
+        versionName = "0.3.1"
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         // Normal phone APK stays arm64-only; opt-in x86_64 build is for CI emulator smoke tests.
         ndk { abiFilters += if (providers.gradleProperty("emulatorBuild").isPresent) listOf("x86_64") else listOf("arm64-v8a") }

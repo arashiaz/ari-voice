@@ -595,12 +595,12 @@ class MainActivity : Activity() {
         openApp(app) { targetPackage ->
             if (generation != workflowGeneration) return@openApp
             setStatus("برنامه باز شد؛ در حال پیدا‌کردن جستجو برای «$query»…")
-            continueInAppSearch(targetPackage, query, profile, false, 0, generation)
+            continueInAppSearch(targetPackage, query, profile, mutableSetOf(), 0, generation)
         }
     }
 
     private fun continueInAppSearch(targetPackage: String, query: String, profile: Boolean,
-                                    searchOpened: Boolean, attempts: Int, generation: Int) {
+                                    clickedSearchControls: MutableSet<String>, attempts: Int, generation: Int) {
         handler.postDelayed({
             if (isDestroyed || generation != workflowGeneration) return@postDelayed
             val service = VoiceAccessibilityService.active
@@ -608,18 +608,24 @@ class MainActivity : Activity() {
                 showWorkflowResult("کنترل صفحه قطع شد؛ جستجو ادامه نیافت.")
                 return@postDelayed
             }
-            when (service.searchInApp(targetPackage, query, searchOpened)) {
+            when (val step = service.searchInApp(targetPackage, query, clickedSearchControls)) {
                 VoiceAccessibilityService.SearchStep.WAIT_FOR_APP,
                 VoiceAccessibilityService.SearchStep.WAIT_FOR_FIELD,
                 VoiceAccessibilityService.SearchStep.NO_SEARCH_UI -> {
                     // Loading and tab transitions can take several seconds on real phones.
                     // Never act on a different foreground package while waiting.
-                    if (attempts < 12) continueInAppSearch(targetPackage, query, profile, searchOpened, attempts + 1, generation)
-                    else showWorkflowResult("کادر جستجو آماده/قابل‌دسترسی نشد. چیزی نوشته یا انتخاب نشد؛ صفحه را باز کنید و دوباره امتحان کنید.")
+                    if (attempts < 12) continueInAppSearch(targetPackage, query, profile, clickedSearchControls, attempts + 1, generation)
+                    else showWorkflowResult(when (step) {
+                        VoiceAccessibilityService.SearchStep.WAIT_FOR_APP ->
+                            "صفحهٔ «$targetPackage» در پیش‌زمینه نبود؛ برای ایمنی جستجو ادامه نیافت."
+                        VoiceAccessibilityService.SearchStep.WAIT_FOR_FIELD ->
+                            "مسیر جستجو باز شد، اما کادر نوشتن در این برنامه قابل‌دسترسی نبود. چیزی نوشته نشد."
+                        else -> "دکمه یا کادر جستجوی قابل‌دسترسی پیدا نشد. چیزی نوشته یا انتخاب نشد."
+                    })
                 }
                 VoiceAccessibilityService.SearchStep.OPENED_SEARCH ->
                     // A search tab may take time to render: restart the bounded retry window.
-                    continueInAppSearch(targetPackage, query, profile, true, 0, generation)
+                    continueInAppSearch(targetPackage, query, profile, clickedSearchControls, 0, generation)
                 VoiceAccessibilityService.SearchStep.ENTERED_QUERY ->
                     showWorkflowResult(if (profile) "نام کاربری «$query» در جستجو نوشته شد. پروفایل درست را خودتان انتخاب کنید."
                         else "«$query» نوشته شد؛ اگر نتایج نیامد کلید جستجو را بزنید. نتیجه و هر خریدی را خودتان بررسی کنید.")
